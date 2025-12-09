@@ -11,13 +11,9 @@ import '../services/cloud_sync_service.dart';
 class SyncIndicator extends StatelessWidget {
   final double size;
   final bool showText;
-  
-  const SyncIndicator({
-    Key? key,
-    this.size = 16.0,
-    this.showText = false,
-  }) : super(key: key);
-  
+
+  const SyncIndicator({super.key, this.size = 16.0, this.showText = false});
+
   @override
   Widget build(BuildContext context) {
     return Consumer<SyncStatusProvider>(
@@ -25,7 +21,7 @@ class SyncIndicator extends StatelessWidget {
         final status = syncProvider.syncStatus;
         final statusText = syncProvider.getStatusText();
         final statusIcon = syncProvider.getStatusIcon();
-        
+
         Widget indicator = Container(
           width: size,
           height: size,
@@ -36,14 +32,11 @@ class SyncIndicator extends StatelessWidget {
           child: Center(
             child: Text(
               statusIcon,
-              style: TextStyle(
-                fontSize: size * 0.6,
-                color: Colors.white,
-              ),
+              style: TextStyle(fontSize: size * 0.6, color: Colors.white),
             ),
           ),
         );
-        
+
         if (showText) {
           indicator = Row(
             mainAxisSize: MainAxisSize.min,
@@ -60,7 +53,7 @@ class SyncIndicator extends StatelessWidget {
             ],
           );
         }
-        
+
         return Tooltip(
           message: statusText,
           child: GestureDetector(
@@ -71,7 +64,7 @@ class SyncIndicator extends StatelessWidget {
       },
     );
   }
-  
+
   Color _getStatusColor(CloudSyncStatus status) {
     switch (status) {
       case CloudSyncStatus.synced:
@@ -86,13 +79,15 @@ class SyncIndicator extends StatelessWidget {
         return Colors.red.shade700;
     }
   }
-  
+
   void _onTap(BuildContext context, SyncStatusProvider syncProvider) {
     if (syncProvider.syncStatus == CloudSyncStatus.offline) {
       // offline durumda bilgi göster
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('İnternet bağlantısı yok. Veriler yerel olarak kaydediliyor.'),
+          content: Text(
+            'İnternet bağlantısı yok. Veriler yerel olarak kaydediliyor.',
+          ),
           duration: Duration(seconds: 2),
         ),
       );
@@ -111,8 +106,8 @@ class SyncIndicator extends StatelessWidget {
 
 /// Compact sync indicator for app bars
 class CompactSyncIndicator extends StatelessWidget {
-  const CompactSyncIndicator({Key? key}) : super(key: key);
-  
+  const CompactSyncIndicator({super.key});
+
   @override
   Widget build(BuildContext context) {
     return const Padding(
@@ -124,8 +119,8 @@ class CompactSyncIndicator extends StatelessWidget {
 
 /// Full sync status widget for settings or profile
 class SyncStatusWidget extends StatelessWidget {
-  const SyncStatusWidget({Key? key}) : super(key: key);
-  
+  const SyncStatusWidget({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Consumer<SyncStatusProvider>(

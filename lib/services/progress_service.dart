@@ -87,12 +87,12 @@ class ProgressService {
       }
 
       if (kDebugMode) {
-        debugPrint('✅ Progress updated for word: $wordId');
+
       }
       return true;
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error updating word progress: $e');
+
       }
       return false;
     }
@@ -116,7 +116,7 @@ class ProgressService {
       return doc.data();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error getting word progress: $e');
+
       }
       return null;
     }
@@ -139,7 +139,7 @@ class ProgressService {
       }).toList();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error getting all word progress: $e');
+
       }
       return [];
     }
@@ -162,7 +162,7 @@ class ProgressService {
       return snapshot.docs.map((doc) => doc.id).toList();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error getting words due for review: $e');
+
       }
       return [];
     }
@@ -182,7 +182,7 @@ class ProgressService {
       return snapshot.docs.map((doc) => doc.id).toList();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error getting mastered words: $e');
+
       }
       return [];
     }
@@ -237,7 +237,7 @@ class ProgressService {
         'averageConfidence': averageConfidence,
       };
     } catch (e) {
-      debugPrint('Error getting learning statistics: $e');
+
       return {};
     }
   }
@@ -282,7 +282,7 @@ class ProgressService {
       };
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error getting daily goal progress: $e');
+
       }
       return {};
     }
@@ -296,12 +296,12 @@ class ProgressService {
           .delete();
 
       if (kDebugMode) {
-        debugPrint('✅ Progress reset for word: $wordId');
+
       }
       return true;
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error resetting word progress: $e');
+
       }
       return false;
     }
@@ -326,12 +326,12 @@ class ProgressService {
       await batch.commit();
 
       if (kDebugMode) {
-        debugPrint('✅ All progress reset for user: $userId');
+
       }
       return true;
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error resetting all progress: $e');
+
       }
       return false;
     }
@@ -394,7 +394,7 @@ class ProgressService {
 
       return distribution;
     } catch (e) {
-      debugPrint('Error getting SRS level distribution: $e');
+
       return {};
     }
   }
@@ -427,7 +427,7 @@ class ProgressService {
 
       return daysDifference <= 1 ? 1 : 0; // Simple streak calculation
     } catch (e) {
-      debugPrint('Error getting learning streak: $e');
+
       return 0;
     }
   }
@@ -511,10 +511,10 @@ class ProgressService {
       await batchHelper.commitAll();
       perfTask.finish();
 
-      Logger.i('✅ Batch progress update completed for ${progressUpdates.length} items', 'ProgressService');
+      Logger.i('Batch progress update completed for ${progressUpdates.length} items', 'ProgressService');
       return true;
     } catch (e) {
-      Logger.e('❌ Error in batch progress update', e, null, 'ProgressService');
+      Logger.e('Error in batch progress update', e, null, 'ProgressService');
       return false;
     }
   }

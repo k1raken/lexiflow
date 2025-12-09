@@ -6,10 +6,23 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+import java.util.Properties
+import java.io.FileInputStream
+
+// Load keystore properties from android/key.properties
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+val storeFilePropConfigured = if (keystorePropertiesFile.exists()) keystoreProperties["storeFile"] as String? else null
+val storeFileCandidate = storeFilePropConfigured?.let { runCatching { rootProject.file(it) }.getOrNull() }
+val hasKeystore = storeFileCandidate?.exists() == true
+
 android {
     namespace = "com.lexiflow.app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         // ✅ Java 17 desteği + desugaring aktif
@@ -29,19 +42,35 @@ android {
     targetSdk = flutter.targetSdkVersion
     versionCode = flutter.versionCode
     versionName = flutter.versionName
-    
-    // AdMob placeholder substitution
-    manifestPlaceholders["ADMOB_APP_ID"] = project.findProperty("ADMOB_APP_ID") ?: "ca-app-pub-3940256099942544~3347511713"
-}
+    }
 
+
+    signingConfigs {
+        if (hasKeystore) {
+            create("release") {
+                val keyAliasProp = keystoreProperties["keyAlias"] as String?
+                val keyPasswordProp = keystoreProperties["keyPassword"] as String?
+                val storePasswordProp = keystoreProperties["storePassword"] as String?
+
+                if (keyAliasProp != null) keyAlias = keyAliasProp
+                if (keyPasswordProp != null) keyPassword = keyPasswordProp
+                storeFile = storeFileCandidate
+                if (storePasswordProp != null) storePassword = storePasswordProp
+            }
+        }
+    }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
-            isShrinkResources = false
+            if (hasKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
@@ -52,7 +81,8 @@ flutter {
 
 dependencies {
       coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-          implementation("androidx.appcompat:appcompat:1.4.0")
+      implementation("androidx.appcompat:appcompat:1.4.0")
+      implementation("androidx.activity:activity-ktx:1.9.0")
 
 
 }

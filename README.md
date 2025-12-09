@@ -1,209 +1,195 @@
 <div align="center">
 
-# 🌱 LexiFlow
+# LexiFlow
 
-### 📘 Learn Smarter. Remember Faster.
+### Learn Smarter. Remember Faster.
 
-*A Modern, Secure & Intelligent Vocabulary Learning App*
+*A vocabulary learning app with spaced repetition, quizzes, and gamification*
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.24-blue?logo=flutter)](https://flutter.dev)
+[![Flutter](https://img.shields.io/badge/Flutter-3.24-02569B?logo=flutter)](https://flutter.dev)
+[![Firebase](https://img.shields.io/badge/Firebase-Required-FFCA28?logo=firebase)](https://firebase.google.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-orange)](#)
-[![Status](https://img.shields.io/badge/Status-Production--Ready-success)](#)
-
----
-
-**Developed by [Kiraken](https://github.com/erenuysl)**
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-blueviolet)](#)
 
 </div>
 
-<hr>
+---
 
-<h2>🚀 Overview</h2>
-<p>
-  LexiFlow is a modern Flutter + Firebase vocabulary learning app.  
-  It offers categorized word lists, adaptive quizzes, progress tracking, and  
-  <b>secure environment-based configuration</b> for production-grade reliability.
-</p>
+> [!IMPORTANT]
+> **Portfolio Project**: This is an open-source portfolio version. The original Firebase backend has been removed. To run this app, you must set up your own Firebase project.
 
-<hr>
+---
 
-<h2>⚙️ Installation &amp; Setup</h2>
+## Features
 
-<h3>1️⃣ Clone</h3>
-<pre><code>git clone https://github.com/erenuysl/lexiflow.git
+- **Spaced Repetition (SRS)** – Science-backed review scheduling
+- **Categorized Word Lists** – Business, Technology, Daily English, and more
+- **Multiple Quiz Types** – Multiple choice, matching, fill-in-the-blank, translation
+- **Daily Streaks** – Stay motivated with streak tracking
+- **Leaderboards** – Compete with weekly and all-time rankings
+- **Detailed Statistics** – Track your learning progress
+- **Dark/Light Theme** – Easy on the eyes
+- **Smart Notifications** – Daily word reminders
+- **Offline Support** – Learn without internet
+
+---
+
+## Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| Framework | Flutter 3.24+ (Dart) |
+| Backend | Firebase (Firestore, Auth, Analytics, Crashlytics) |
+| State Management | Provider + GetIt |
+| Local Storage | Hive + SharedPreferences |
+| Ads | Google AdMob (optional) |
+| UI | Material 3 + Google Fonts |
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Flutter SDK 3.24+
+- A Firebase project (free tier works)
+- Android Studio / Xcode
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/k1raken/lexiflow.git
 cd lexiflow
-</code></pre>
+flutter pub get
+```
 
-<h3>2️⃣ Dependencies</h3>
-<pre><code>flutter pub get
-</code></pre>
+---
 
-<h3>3️⃣ .env (Environment)</h3>
-<p>Copy <code>.env.example</code> to <code>.env</code> and add your Firebase configuration:</p>
-<pre><code>cp .env.example .env
-</code></pre>
-<p>Then edit <code>.env</code> with your actual Firebase values from Firebase Console:</p>
-<pre><code># Firebase Configuration
-FIREBASE_API_KEY=your_firebase_api_key_here
-FIREBASE_APP_ID=your_firebase_app_id_here
-FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id_here
-FIREBASE_PROJECT_ID=your_project_id_here
-FIREBASE_PROJECT_NUMBER=your_project_number_here
-FIREBASE_STORAGE_BUCKET=your_storage_bucket_here
+## Firebase Setup
 
-# AdMob Configuration  
-ADMOB_APP_ID=your_admob_app_id_here
-ADMOB_BANNER_AD_UNIT_ID=ca-app-pub-3940256099942544/6300978111
-ADMOB_INTERSTITIAL_AD_UNIT_ID=ca-app-pub-3940256099942544/1033173712
+> [!NOTE]
+> This app requires Firebase to function. Follow these steps to connect your own Firebase project.
 
-DEBUG_MODE=true
-</code></pre>
-<p><b>⚠️ Important:</b> Never commit the <code>.env</code> file! Use <code>.env.example</code> as template.</p>
+### Step 1: Create a Firebase Project
 
-<hr>
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Click "Add project" and follow the wizard
+3. Enable Google Analytics (recommended)
 
-<h2>🔥 Firebase Setup</h2>
+### Step 2: Add Android App
 
-<h3>1️⃣ Configure</h3>
-<pre><code>flutterfire configure
-</code></pre>
+1. In Firebase Console, click "Add app" → Android
+2. Package name: `com.lexiflow.app` (or your custom package)
+3. Download `google-services.json`
+4. Place it in: `android/app/google-services.json`
 
-<h3>2️⃣ Local (Not Tracked)</h3>
-<pre><code>android/app/google-services.json
-ios/Runner/GoogleService-Info.plist
-</code></pre>
+### Step 3: Add iOS App (Optional)
 
-<h3>3️⃣ Firestore Rules (Secure Example)</h3>
-<pre><code>rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+1. In Firebase Console, click "Add app" → iOS
+2. Bundle ID: `com.lexiflow.app`
+3. Download `GoogleService-Info.plist`
+4. Place it in: `ios/Runner/GoogleService-Info.plist`
 
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
-    }
+### Step 4: Enable Firebase Services
 
-    match /users/{userId} {
-      allow create: if isOwner(userId);
-      allow read, update, delete: if isOwner(userId);
+In Firebase Console, enable:
 
-      match /learned_words/{wordId} {
-        allow read, write: if isOwner(userId);
-      }
-      match /favorites/{wordId} {
-        allow read, write: if isOwner(userId);
-      }
-      match /custom_words/{wordId} {
-        allow read, write: if isOwner(userId);
-      }
-    }
+| Service | Location |
+|---------|----------|
+| **Authentication** | Build → Authentication → Sign-in method → Enable Google |
+| **Firestore** | Build → Firestore Database → Create database (production mode) |
+| **Analytics** | Enabled by default |
+| **Crashlytics** | Release & Monitor → Crashlytics → Enable |
 
-    match /leaderboard_all_time/{userId} {
-      allow read: if true;
-      allow write: if isOwner(userId);
-    }
+### Step 5: Deploy Firestore Rules
 
-    match /leaderboard_weekly/{userId} {
-      allow read: if true;
-      allow write: if isOwner(userId);
-    }
+```bash
+firebase login
+firebase init firestore
+firebase deploy --only firestore:rules
+```
 
-    // Deny everything else by default
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
-</code></pre>
+Or manually copy the rules from `firestore.rules` to Firebase Console → Firestore → Rules.
 
-<hr>
+### Step 6: Configure AdMob (Optional)
 
-<h2>🧱 Project Structure</h2>
-<pre><code>lexiflow/
-├── android/
-├── ios/
-├── lib/
-│   ├── models/
-│   ├── screens/
-│   ├── services/
-│   ├── utils/
-│   ├── widgets/
-│   └── main.dart
-├── assets/
-│   ├── icons/
-│   ├── images/
-│   ├── animations/
-│   ├── legal/
-│   └── words/
-├── store_assets/
-│   ├── playstore.png
-│   └── appstore.png
-├── env/
-│   ├── .env.dev
-│   ├── .env.prod
-│   └── .env.example
-├── firestore.rules
-├── pubspec.yaml
-├── .gitignore
-└── README.md
-</code></pre>
+If you want ads, update `android/app/src/main/AndroidManifest.xml`:
 
-<hr>
+```xml
+<meta-data
+    android:name="com.google.android.gms.ads.APPLICATION_ID"
+    android:value="YOUR_ADMOB_APP_ID" />
+```
 
-<h2>🔒 Security &amp; Privacy</h2>
-<ul>
-  <li>🔐 No API keys or secrets committed — all stored securely in <code>.env</code>.</li>
-  <li>🧠 Firestore rules enforce per-user access (<code>request.auth.uid == userId</code>).</li>
-  <li>🌍 Separate <code>.env.dev</code> / <code>.env.prod</code> environments.</li>
-  <li>🧹 Debug logs protected with <code>kDebugMode</code>.</li>
-  <li>⚙️ <code>.gitignore</code> fully excludes secrets, build files, and credentials.</li>
-</ul>
-<p><b>Recommendations:</b> Rotate keys every 3–6 months, add pre-commit hooks to block <code>.env</code>, enable GitHub secret scanning, and monitor Firebase usage.</p>
+To disable ads, set `adsEnabled: false` in `lib/utils/feature_flags.dart`.
 
-<hr>
+### Step 7: Create Signing Keystore (For Release)
 
-<h2>🧪 Build &amp; Deployment</h2>
+For release builds, create your own signing keystore:
 
-<h3>Debug</h3>
-<pre><code>flutter run
-</code></pre>
+```bash
+keytool -genkey -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
 
-<h3>Release (Production)</h3>
-<pre><code>flutter build appbundle --release
-</code></pre>
-<p><b>Android Note:</b> Enable <code>isMinifyEnabled = true</code>, <code>isShrinkResources = true</code>, and configure release signing locally only.</p>
+Then create `android/key.properties`:
 
-<hr>
+```properties
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=upload
+storeFile=../app/upload-keystore.jks
+```
 
-<h2>🧾 Release Checklist</h2>
-<ul>
-  <li>✅ No secrets in repository</li>
-  <li>✅ <code>.env</code> properly configured</li>
-  <li>✅ Firebase config secured</li>
-  <li>✅ Obfuscation &amp; shrinking active</li>
-  <li>✅ Dependencies updated</li>
-  <li>✅ Firestore rules verified</li>
-</ul>
+---
 
-<hr>
+## Running the App
 
-<h2>💡 Credits</h2>
-<table>
-  <thead>
-    <tr><th>Role</th><th>Contributor</th></tr>
-  </thead>
-  <tbody>
-    <tr><td>👨‍💻 Developer</td><td><a href="https://github.com/erenuysl">Kiraken</a></td></tr>
-    <tr><td>🧩 Framework</td><td>Flutter 3.x</td></tr>
-    <tr><td>☁️ Backend</td><td>Firebase Firestore &amp; Auth</td></tr>
-    <tr><td>🎨 UI/UX</td><td>Minimal &amp; Responsive Custom Design</td></tr>
-  </tbody>
-</table>
+```bash
+# Debug mode
+flutter run
 
-<hr>
+# Release mode
+flutter run --release
+```
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Security-Verified-brightgreen?style=for-the-badge" alt="Security Verified"><br>
-  <b>LexiFlow — Clean, Secure, and Production-Ready.</b><br>
-  ⭐ Star this repo → <a href="https://github.com/erenuysl/lexiflow">GitHub</a>
-</p>
+---
+
+## Project Structure
+
+```
+lib/
+├── core/           # Configuration, constants
+├── models/         # Data models (Word, User, etc.)
+├── screens/        # UI screens (Dashboard, Quiz, Profile)
+├── services/       # Business logic (Firebase, SRS, Sync)
+├── providers/      # State management (Theme, Session)
+├── widgets/        # Reusable UI components
+├── utils/          # Helper functions
+└── main.dart       # Entry point
+```
+
+---
+
+## Security Notes
+
+- No API keys committed to repository
+- Firebase config files are gitignored
+- Firestore rules enforce per-user access
+- Production-ready clean code (no debug logs)
+
+---
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
+
+---
+
+## Author
+
+**Kiraken** — [@k1raken](https://github.com/k1raken)

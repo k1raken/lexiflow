@@ -7,7 +7,8 @@ class LeaderEntry {
   final String uid;
   final String username; // fallback to displayName or email prefix if missing
   final String? avatarUrl;
-  final int rankValue; // metric value (level / longestStreak / totalQuizzesCompleted)
+  final int
+  rankValue; // metric value (level / longestStreak / totalQuizzesCompleted)
   final int? secondary; // e.g., currentStreak for streak metric
   final int index; // 1..10; set in service mapping stage
 
@@ -28,22 +29,23 @@ class LeaderEntry {
   }) {
     final data = doc.data() ?? <String, dynamic>{};
     final statsRaw = data['stats'];
-    final stats = statsRaw is Map<String, dynamic> ? statsRaw : <String, dynamic>{};
+    final stats =
+        statsRaw is Map<String, dynamic> ? statsRaw : <String, dynamic>{};
 
-    String _stringOrEmpty(dynamic v) => v is String ? v : '';
-    int _intOrDefault(dynamic v, int def) {
+    String stringOrEmpty(dynamic v) => v is String ? v : '';
+    int intOrDefault(dynamic v, int def) {
       if (v is int) return v;
       if (v is num) return v.toInt();
       return def;
     }
 
     // Username fallback chain: stats.username -> displayName -> email prefix -> 'User'
-    String username = _stringOrEmpty(stats['username']).trim();
+    String username = stringOrEmpty(stats['username']).trim();
     if (username.isEmpty) {
-      username = _stringOrEmpty(data['displayName']).trim();
+      username = stringOrEmpty(data['displayName']).trim();
     }
     if (username.isEmpty) {
-      final email = _stringOrEmpty(data['email']).trim();
+      final email = stringOrEmpty(data['email']).trim();
       if (email.contains('@')) {
         username = email.split('@').first;
       }
@@ -53,15 +55,16 @@ class LeaderEntry {
     }
 
     final avatarCandidate = stats['photoURL'];
-    final avatarUrl = (avatarCandidate is String && avatarCandidate.trim().isNotEmpty)
-        ? avatarCandidate
-        : null;
+    final avatarUrl =
+        (avatarCandidate is String && avatarCandidate.trim().isNotEmpty)
+            ? avatarCandidate
+            : null;
 
     // Defaults for missing stats
-    final level = _intOrDefault(stats['level'], 1);
-    final longestStreak = _intOrDefault(stats['longestStreak'], 0);
-    final currentStreak = _intOrDefault(stats['currentStreak'], 0);
-    final totalQuizzes = _intOrDefault(stats['totalQuizzesCompleted'], 0);
+    final level = intOrDefault(stats['level'], 1);
+    final longestStreak = intOrDefault(stats['longestStreak'], 0);
+    final currentStreak = intOrDefault(stats['currentStreak'], 0);
+    final totalQuizzes = intOrDefault(stats['totalQuizzesCompleted'], 0);
 
     int rankValue;
     int? secondary;
@@ -95,13 +98,13 @@ class LeaderEntry {
   }
 
   LeaderEntry withIndex(int index) => LeaderEntry(
-        uid: uid,
-        username: username,
-        avatarUrl: avatarUrl,
-        rankValue: rankValue,
-        secondary: secondary,
-        index: index,
-      );
+    uid: uid,
+    username: username,
+    avatarUrl: avatarUrl,
+    rankValue: rankValue,
+    secondary: secondary,
+    index: index,
+  );
 
   @override
   String toString() {

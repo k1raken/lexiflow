@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'dart:math';
@@ -9,6 +10,7 @@ import 'srs_service.dart';
 import '../models/daily_log.dart';
 import 'favorites_cleanup_service.dart';
 import 'word_loader.dart';
+import 'sync_queue_service.dart';
 
 // compute requires a top-level function; we provide a parser
 List<Word> _parseWordsFromJsonString(String jsonString) {
@@ -38,7 +40,6 @@ class WordService {
     } catch (e) {
       // schema değişikliği durumunda eski veriyi temizle
       if (kDebugMode) {
-        print('⚠️ Error opening words box, clearing old data: $e');
       }
       await Hive.deleteBoxFromDisk(_wordsBoxName);
       await Hive.openBox<Word>(_wordsBoxName);
@@ -55,7 +56,6 @@ class WordService {
         await FavoritesCleanupService.cleanupDuplicateFavorites();
     if (duplicatesRemoved > 0) {
       if (kDebugMode) {
-        print(
           '🧹 Removed $duplicatesRemoved duplicate favorites during initialization',
         );
       }
@@ -63,7 +63,6 @@ class WordService {
 
     final stats = FavoritesCleanupService.getFavoritesStats();
     if (kDebugMode) {
-      print(
         '📊 Favorites stats: ${stats['total']} total, ${stats['unique']} unique, ${stats['duplicates']} duplicates',
       );
     }
@@ -72,26 +71,20 @@ class WordService {
   Future<void> _loadWordsFromJson() async {
     try {
       if (kDebugMode) {
-        print('📚 Loading words from JSON...');
       }
       final String jsonString = await rootBundle.loadString(
         'assets/words/1kwords.json',
       );
       if (kDebugMode) {
-        print('✅ JSON file loaded, size: ${jsonString.length} bytes');
       }
       // Parse on a background isolate to avoid main-thread jank
       _allWords = await compute(_parseWordsFromJsonString, jsonString);
       if (kDebugMode) {
-        print('✅ JSON parsed off-main-thread, ${_allWords.length} words found');
       }
       if (kDebugMode) {
-        print('✅ All words loaded successfully!');
       }
     } catch (e, stackTrace) {
       if (kDebugMode) {
-        print('❌ Error loading words: $e');
-        print('Stack trace: $stackTrace');
       }
       _allWords = [];
     }
@@ -217,7 +210,6 @@ class WordService {
   // DEPRECATED - getFavoriteWordsFirestore kullan
   List<Word> getFavoriteWords() {
     if (kDebugMode) {
-      print(
         '⚠️ WARNING: getFavoriteWords() is deprecated, use getFavoriteWordsFirestore()',
       );
     }
@@ -235,7 +227,6 @@ class WordService {
   Future<List<Word>> getFavoriteWordsFirestore(String userId) async {
     try {
       if (kDebugMode) {
-        print('🔍 [FIX] Getting favorite words for user: $userId');
       }
 
       final snapshot =
@@ -247,27 +238,21 @@ class WordService {
 
       final favoriteKeys = snapshot.docs.map((doc) => doc.id).toSet();
       if (kDebugMode) {
-        print('📋 [FIX] Favorite keys count: ${favoriteKeys.length}');
-        print('📋 [FIX] First 3 keys: ${favoriteKeys.take(3).toList()}');
       }
 
       final words = mapFavoriteKeysToWords(favoriteKeys);
       if (kDebugMode) {
-        print('📚 [FIX] Mapped words count: ${words.length}');
       }
 
       if (words.isEmpty && favoriteKeys.isNotEmpty) {
         if (kDebugMode) {
-          print(
             '⚠️ [FIX] Keys exist but no words mapped. Checking _allWords...',
           );
-          print('📚 [FIX] Total words in memory: ${_allWords.length}');
 
           // DEBUG: key'lerin kelimelerle eşleşip eşleşmediğini kontrol et
           for (final key in favoriteKeys.take(3)) {
             final matchingWords =
                 _allWords.where((w) => w.word == key).toList();
-            print('🔍 [FIX] Key "$key" matches ${matchingWords.length} words');
           }
         }
       }
@@ -275,13 +260,11 @@ class WordService {
       // FALLBACK: hiç kelime bulunamazsa public kelimeler döndür
       if (words.isEmpty) {
         if (kDebugMode) {
-          print(
             '⚠️ [FIX] No favorite words found, trying public words fallback...',
           );
         }
         final publicWords = await getPublicWords(limit: 10);
         if (kDebugMode) {
-          print('📚 [FIX] Fallback public words: ${publicWords.length}');
         }
         return publicWords.take(7).toList();
       }
@@ -289,7 +272,6 @@ class WordService {
       return words;
     } catch (e) {
       if (kDebugMode) {
-        print('❌ [FIX] Error getting favorite words: $e');
       }
       return [];
     }
@@ -298,7 +280,6 @@ class WordService {
   // DEPRECATED - getRandomFavoritesFirestore kullan
   List<Word> getRandomFavorites(int count) {
     if (kDebugMode) {
-      print(
         '⚠️ WARNING: getRandomFavorites() is deprecated, use getRandomFavoritesFirestore()',
       );
     }
@@ -315,24 +296,20 @@ class WordService {
   ) async {
     try {
       if (kDebugMode) {
-        print('🎯 [FIX] Getting $count random favorites for user: $userId');
       }
 
       final favorites = await getFavoriteWordsFirestore(userId);
       if (kDebugMode) {
-        print('🎯 [FIX] Total favorites available: ${favorites.length}');
       }
 
       if (favorites.isEmpty) {
         if (kDebugMode) {
-          print('❌ [FIX] No favorites found');
         }
         return [];
       }
 
       if (favorites.length <= count) {
         if (kDebugMode) {
-          print('✅ [FIX] Returning all ${favorites.length} favorites');
         }
         return favorites;
       }
@@ -340,12 +317,10 @@ class WordService {
       favorites.shuffle(Random());
       final selected = favorites.take(count).toList();
       if (kDebugMode) {
-        print('✅ [FIX] Selected ${selected.length} random favorites');
       }
       return selected;
     } catch (e) {
       if (kDebugMode) {
-        print('❌ [FIX] Error getting random favorites: $e');
       }
       return [];
     }
@@ -407,9 +382,7 @@ class WordService {
         await favoritesBox.add(word.word);
       }
 
-      print('✅ Custom word added successfully: ${word.word}');
     } catch (e) {
-      print('❌ Error in addCustomWord: $e');
       rethrow;
     }
   }
@@ -458,7 +431,6 @@ class WordService {
         }
       }
     } catch (e) {
-      debugPrint('FSRS hydrate failed: $e');
     }
   }
 
@@ -581,7 +553,6 @@ class WordService {
 
   Future<List<Word>> getLearnedWordsFirestore(String userId) async {
     try {
-      print('🔍 [LEARNED] Getting learned words for user: $userId');
 
       final snapshot =
           await firestore
@@ -592,14 +563,11 @@ class WordService {
               .get();
 
       final learnedKeys = snapshot.docs.map((doc) => doc.id).toSet();
-      print('📋 [LEARNED] Learned keys count: ${learnedKeys.length}');
 
       final words = mapLearnedKeysToWords(learnedKeys);
-      print('📚 [LEARNED] Mapped words count: ${words.length}');
 
       return words;
     } catch (e) {
-      print('❌ [LEARNED] Error getting learned words: $e');
       return [];
     }
   }
@@ -615,7 +583,6 @@ class WordService {
       // duplicate'ları önlemek için kontrol et
       final existingDoc = await learnedRef.get();
       if (existingDoc.exists) {
-        print('📚 [LEARNED] Word already in learned collection: ${word.word}');
         return;
       }
 
@@ -628,9 +595,7 @@ class WordService {
         'learnedAt': FieldValue.serverTimestamp(),
       });
 
-      print('✅ [LEARNED] Added word to learned collection: ${word.word}');
     } catch (e) {
-      print('❌ [LEARNED] Error adding word to learned collection: $e');
     }
   }
 
@@ -639,31 +604,25 @@ class WordService {
     int count,
   ) async {
     try {
-      print(
         '🎯 [LEARNED] Getting $count random learned words for user: $userId',
       );
 
       final learnedWords = await getLearnedWordsFirestore(userId);
-      print(
         '🎯 [LEARNED] Total learned words available: ${learnedWords.length}',
       );
 
       if (learnedWords.isEmpty) {
-        print('❌ [LEARNED] No learned words found');
         return [];
       }
 
       if (learnedWords.length <= count) {
-        print('✅ [LEARNED] Returning all ${learnedWords.length} learned words');
         return learnedWords;
       }
 
       learnedWords.shuffle(Random());
       final selected = learnedWords.take(count).toList();
-      print('✅ [LEARNED] Selected ${selected.length} random learned words');
       return selected;
     } catch (e) {
-      print('❌ [LEARNED] Error getting random learned words: $e');
       return [];
     }
   }
@@ -718,6 +677,90 @@ class WordService {
     }
   }
 
+  /// OPTIMISTIC UI: Toggle favorite with instant local update and background sync
+  /// This is the recommended method for better UX (no blocking, no loading spinners)
+  Future<void> toggleFavoriteOptimistic(Word word, String userId) async {
+    // Step 1: Update local state IMMEDIATELY (< 16ms)
+    await toggleFavorite(word);
+    
+    // Step 2: Queue Firestore sync in background (no await = non-blocking)
+    unawaited(_queueFavoriteSync(word, userId));
+  }
+
+  /// Background sync for favorite toggle
+  Future<void> _queueFavoriteSync(Word word, String userId) async {
+    final isFav = isFavorite(word);
+    
+    try {
+      // Try to sync to Firestore immediately
+      await _syncFavoriteToFirestore(word, userId, isFav);
+      
+      if (kDebugMode) {
+      }
+    } catch (e) {
+      // Offline or error → Queue for later (silent, no user notification)
+      if (kDebugMode) {
+      }
+      
+      await SyncQueueService().addOperation(
+        type: isFav ? 'favorite_add' : 'favorite_remove',
+        data: {
+          'userId': userId,
+          'word': word.word,
+          'meaning': word.meaning,
+          'tr': word.tr,
+          'example': word.example,
+          'isCustom': word.isCustom,
+        },
+      );
+    }
+  }
+
+  /// Sync favorite to Firestore (extracted for reuse)
+  Future<void> _syncFavoriteToFirestore(Word word, String userId, bool isAdding) async {
+    final favRef = firestore
+        .collection('users')
+        .doc(userId)
+        .collection('favorites')
+        .doc(word.word);
+
+    final statsRef = firestore.collection('users').doc(userId);
+
+    await firestore.runTransaction((tx) async {
+      final favSnap = await tx.get(favRef);
+      final statsSnap = await tx.get(statsRef);
+
+      final currentCount = (statsSnap.data()?['favoritesCount'] ?? 0) as int;
+      int nextCount = currentCount;
+
+      if (isAdding) {
+        // Add favorite
+        if (!favSnap.exists) {
+          tx.set(favRef, {
+            'word': word.word,
+            'meaning': word.meaning,
+            'tr': word.tr,
+            'example': word.example,
+            'isCustom': word.isCustom,
+            'addedAt': FieldValue.serverTimestamp(),
+          });
+          nextCount = currentCount + 1;
+        }
+      } else {
+        // Remove favorite
+        if (favSnap.exists) {
+          tx.delete(favRef);
+          nextCount = currentCount > 0 ? currentCount - 1 : 0;
+        }
+      }
+
+      if (nextCount < 0) nextCount = 0;
+      tx.set(statsRef, {
+        'favoritesCount': nextCount,
+      }, SetOptions(merge: true));
+    });
+  }
+
   Stream<List<Map<String, dynamic>>> getCustomWordsStream(String userId) {
     return firestore
         .collection('users')
@@ -757,9 +800,7 @@ class WordService {
             'srsLevel': 0,
             'nextReviewDate': null,
           });
-      print('✅ Custom word added: $word');
     } catch (e) {
-      print('❌ Error adding custom word: $e');
       rethrow;
     }
   }
@@ -772,9 +813,7 @@ class WordService {
           .collection('custom_words')
           .doc(wordId)
           .delete();
-      print('✅ Custom word deleted: $wordId');
     } catch (e) {
-      print('❌ Error deleting custom word: $e');
       rethrow;
     }
   }
@@ -806,9 +845,7 @@ class WordService {
         'createdAt': FieldValue.serverTimestamp(),
         'wordCount': 0,
       });
-      print('✅ Deck created: $name');
     } catch (e) {
-      print('❌ Error creating deck: $e');
       rethrow;
     }
   }
@@ -821,9 +858,7 @@ class WordService {
           .collection('decks')
           .doc(deckId)
           .delete();
-      print('✅ Deck deleted: $deckId');
     } catch (e) {
-      print('❌ Error deleting deck: $e');
       rethrow;
     }
   }
@@ -831,14 +866,11 @@ class WordService {
   /// ana veritabanından public kelimeler al (favoriler için fallback)
   Future<List<Word>> getPublicWords({int limit = 10}) async {
     try {
-      print('📚 [FIX] Getting public words, limit: $limit');
 
       final randomWords = getRandomWordsFromDatabase(limit);
-      print('📚 [FIX] Retrieved ${randomWords.length} public words');
 
       return randomWords;
     } catch (e) {
-      print('❌ [FIX] Error getting public words: $e');
       return [];
     }
   }
@@ -853,7 +885,6 @@ class WordService {
       // _allWords zaten 1kwords.json'dan yüklendi
       return List<Word>.from(_allWords);
     } catch (e) {
-      debugPrint('❌ Error getting local words: $e');
       return [];
     }
   }
@@ -862,12 +893,10 @@ class WordService {
   Future<List<Word>> getCategoryWords(String categoryKey) async {
     try {
       final categoryWords = await WordLoader.loadCategoryWords(categoryKey);
-      debugPrint(
         '📚 Loaded ${categoryWords.length} words for category: $categoryKey',
       );
       return categoryWords;
     } catch (e) {
-      debugPrint('❌ Error loading category words for $categoryKey: $e');
       return [];
     }
   }

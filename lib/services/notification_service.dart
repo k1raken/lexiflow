@@ -3,15 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../di/locator.dart';
 import '../models/word_model.dart';
-import '../services/word_service.dart';
 import '../services/daily_word_service.dart';
+import '../services/daily_word_service_v2.dart';
+import '../services/local_streak_tracker.dart';
 
 class NotificationService {
   NotificationService._();
@@ -49,45 +49,52 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    // Timezone init (safe-guarded)
     try {
-      tz.initializeTimeZones();
-      final localName = DateTime.now().timeZoneName;
+      // Timezone init (safe-guarded)
       try {
-        tz.setLocalLocation(tz.getLocation(localName));
-      } catch (_) {
-        // Fallback to default local if mapping fails
-        tz.setLocalLocation(tz.local);
-      }
-    } catch (_) {}
-
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosInit = DarwinInitializationSettings();
-    const initSettings = InitializationSettings(
-      android: androidInit,
-      iOS: iosInit,
-    );
-
-    await _plugin.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (resp) async {
-        final payload = resp.payload;
-        if (payload != null && payload.isNotEmpty) {
-          _handlePayload(payload);
+        tz.initializeTimeZones();
+        final localName = DateTime.now().timeZoneName;
+        try {
+          tz.setLocalLocation(tz.getLocation(localName));
+        } catch (_) {
+          // Fallback to default local if mapping fails
+          tz.setLocalLocation(tz.local);
         }
-      },
-    );
+      } catch (e) {
+      }
 
-    // Create default channel on Android
-    if (Platform.isAndroid) {
-      await _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.createNotificationChannel(_defaultChannel);
+      // Use drawable instead of mipmap for notification icon
+      const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
+      const iosInit = DarwinInitializationSettings();
+      const initSettings = InitializationSettings(
+        android: androidInit,
+        iOS: iosInit,
+      );
+
+      await _plugin.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: (resp) async {
+          final payload = resp.payload;
+          if (payload != null && payload.isNotEmpty) {
+            _handlePayload(payload);
+          }
+        },
+      );
+
+      // Create default channel on Android
+      if (Platform.isAndroid) {
+        await _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.createNotificationChannel(_defaultChannel);
+      }
+
+      _initialized = true;
+    } catch (e, stackTrace) {
+      // Don't rethrow - allow app to continue without notifications
+      _initialized = false;
     }
-
-    _initialized = true;
   }
 
   Future<bool> requestPermission() async {
@@ -343,53 +350,43 @@ class NotificationService {
     required bool weekdaysOnly,
   }) async {
     try {
-      final dailyWordService = locator<DailyWordService>();
-      final word = await dailyWordService.getGlobalWordOfDay();
-      if (word == null) {
-        if (kDebugMode) {
-          print(
-            '[NotificationService] No global daily word available to schedule.',
-          );
-        }
+      // Use DailyWordServiceV2 to get first word from user's personal daily words
+      final dailyWordService = DailyWordServiceV2();
+      final wordId = await dailyWordService.getFirstDailyWordForNotification(userId);
+      
+      if (wordId == null) {
+        // No personal daily words for today, skip notification
         await cancel(idDailyWord);
         return;
       }
-
-      final meaning =
-          word.meaning.trim().isNotEmpty ? word.meaning.trim() : word.tr.trim();
-      final body = meaning.isNotEmpty ? '${word.word} - $meaning' : word.word;
-
+      
+      // Use Turkish notification message
+      const body = 'Günün kelimesini hatırladın mı?';
+      
+      // Create payload to navigate to daily words screen
       final payloadMap = <String, dynamic>{
-        'route': '/word-detail',
-        'word': word.word,
-        'meaning': word.meaning,
-        'example': word.example,
-        'exampleSentence': word.exampleSentence,
-        'tr': word.tr,
-        'category': word.category,
+        'route': '/daily-words',
+        'word': wordId,
         'scheduledFor': _todayKey(),
       };
       final payload = jsonEncode(payloadMap);
-
+      
+      // Schedule notification with the word as title
       await scheduleDaily(
         id: idDailyWord,
-        title: 'Word of the Day',
+        title: wordId,
         body: body,
         time: time,
         weekdays:
             weekdaysOnly ? const {1, 2, 3, 4, 5} : const {1, 2, 3, 4, 5, 6, 7},
         payload: payload,
       );
-
+      
+      
       final sp = await SharedPreferences.getInstance();
       await sp.setString(_kDailyWordScheduledDate, _todayKey());
       await sp.setString(_kDailyWordPayload, payload);
     } catch (e) {
-      if (kDebugMode) {
-        print(
-          '[NotificationService] Failed to schedule daily word notification: $e',
-        );
-      }
     }
   }
 
@@ -413,14 +410,8 @@ class NotificationService {
     }
 
     if (stEnabled) {
-      await scheduleDaily(
-        id: idStreak,
-        title: 'Keep Your Streak',
-        body: "Do not miss today's learning goal!",
-        time: stTime,
-        weekdays: stWeekdays ? {1, 2, 3, 4, 5} : {1, 2, 3, 4, 5, 6, 7},
-        payload: '/quiz',
-      );
+      // Use smart streak notification instead of generic one
+      await scheduleSmartStreakNotification(time: stTime, weekdaysOnly: stWeekdays);
     } else {
       await cancel(idStreak);
     }
@@ -436,6 +427,82 @@ class NotificationService {
       );
     } else {
       await cancel(idReview);
+    }
+  }
+
+  /// Schedule smart streak notification with dynamic message
+  /// Only schedules if user hasn't studied today
+  Future<void> scheduleSmartStreakNotification({
+    required TimeOfDay time,
+    bool weekdaysOnly = false,
+  }) async {
+    try {
+      final streakTracker = LocalStreakTracker();
+      final hasStudied = await streakTracker.hasStudiedToday();
+      
+      if (hasStudied) {
+        // User already studied, cancel notification
+        await cancel(idStreak);
+        if (kDebugMode) {
+        }
+        return;
+      }
+      
+      // Get current streak for message
+      final streak = await streakTracker.getCurrentStreak();
+      final message = _getStreakNotificationBody(streak);
+      
+      // Check if we should schedule for today
+      final now = DateTime.now();
+      final scheduledTime = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+      
+      if (scheduledTime.isBefore(now)) {
+        // Already past scheduled time today, don't schedule
+        if (kDebugMode) {
+        }
+        return;
+      }
+      
+      await scheduleDaily(
+        id: idStreak,
+        title: 'LexiFlow Streak Alert',
+        body: message,
+        time: time,
+        weekdays: weekdaysOnly ? {1, 2, 3, 4, 5} : {1, 2, 3, 4, 5, 6, 7},
+        payload: '/dashboard',
+      );
+      
+      if (kDebugMode) {
+      }
+    } catch (e) {
+      if (kDebugMode) {
+      }
+    }
+  }
+
+  /// Get dynamic notification message based on streak count
+  String _getStreakNotificationBody(int streak) {
+    if (streak > 0) {
+      return "🔥 Danger! Your $streak day streak is about to break! Rescue it now!";
+    } else {
+      return "Time to start a new winning streak! 🚀";
+    }
+  }
+
+  /// Cancel streak notification (call when user studies)
+  Future<void> cancelStreakNotificationIfStudied() async {
+    try {
+      final streakTracker = LocalStreakTracker();
+      final hasStudied = await streakTracker.hasStudiedToday();
+      
+      if (hasStudied) {
+        await cancel(idStreak);
+        if (kDebugMode) {
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+      }
     }
   }
 

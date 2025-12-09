@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import '../services/word_service.dart';
 import '../services/user_service.dart';
 import '../services/quiz_generator.dart';
-import '../widgets/lexiflow_toast.dart';
 import '../utils/design_system.dart';
 import '../di/locator.dart';
+import '../services/ad_service.dart';
+import '../utils/feature_flags.dart';
 
 class GeneralQuizScreen extends StatefulWidget {
   const GeneralQuizScreen({super.key});
@@ -30,16 +31,36 @@ class _GeneralQuizScreenState extends State<GeneralQuizScreen> {
         _errorMessage = null;
       });
 
+      // Enforce rewarded ad gate with cooldown before generating quiz
+      final adService = locator<AdService>();
+      final gateOk =
+          FeatureFlags.adsEnabled
+              ? await adService.enforceRewardedGateIfNeeded(
+                context: context,
+                chillMs: Duration(minutes: 20).inMilliseconds,
+                grantXpOnReward: true,
+              )
+              : true; // Reklamlar devre dışı ise doğrudan geç
+      if (!gateOk) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Reklam gösterilemedi, lütfen tekrar deneyin.';
+        });
+        return;
+      }
+
       final wordService = locator<WordService>();
       final userService = locator<UserService>();
 
       // 1K kelimelerden quiz oluştur
       final allWords = await wordService.getAllWordsFromLocal();
-      
+
       if (!QuizGenerator.canGenerateQuiz(allWords)) {
         setState(() {
           _isLoading = false;
-          _errorMessage = QuizGenerator.getInsufficientWordsMessage(allWords.length);
+          _errorMessage = QuizGenerator.getInsufficientWordsMessage(
+            allWords.length,
+          );
         });
         return;
       }
@@ -58,15 +79,12 @@ class _GeneralQuizScreenState extends State<GeneralQuizScreen> {
       }
 
       // Quiz ekranına geç
-      if (mounted) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/quiz/play',
-          arguments: {
-            'quizData': quizData,
-          },
-        );
-      }
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
+        context,
+        '/quiz/play',
+        arguments: {'quizData': quizData},
+      );
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -84,9 +102,7 @@ class _GeneralQuizScreenState extends State<GeneralQuizScreen> {
         foregroundColor: Colors.white,
       ),
       body: Center(
-        child: _isLoading
-            ? _buildLoadingWidget()
-            : _buildErrorWidget(),
+        child: _isLoading ? _buildLoadingWidget() : _buildErrorWidget(),
       ),
     );
   }
@@ -101,9 +117,7 @@ class _GeneralQuizScreenState extends State<GeneralQuizScreen> {
         const SizedBox(height: 16),
         Text(
           'Quiz hazırlanıyor...',
-          style: AppTextStyles.body1.copyWith(
-            color: AppColors.textSecondary,
-          ),
+          style: AppTextStyles.body1.copyWith(color: AppColors.textSecondary),
         ),
       ],
     );
@@ -115,25 +129,17 @@ class _GeneralQuizScreenState extends State<GeneralQuizScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 64,
-            color: AppColors.error,
-          ),
+          Icon(Icons.error_outline, size: 64, color: AppColors.error),
           const SizedBox(height: 16),
           Text(
             'Quiz Başlatılamadı',
-            style: AppTextStyles.title1.copyWith(
-              color: AppColors.textPrimary,
-            ),
+            style: AppTextStyles.title1.copyWith(color: AppColors.textPrimary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             _errorMessage ?? 'Bilinmeyen bir hata oluştu',
-            style: AppTextStyles.body2.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),

@@ -10,21 +10,21 @@ import '../utils/streak_migration_helper.dart';
 
 class ProfileStatsProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   AggregatedProfileStats _stats = AggregatedProfileStats.loading();
   StreamSubscription<DocumentSnapshot>? _leaderboardSubscription;
   StreamSubscription<DocumentSnapshot>? _summarySubscription;
   StreamSubscription<QuerySnapshot>? _learnedWordsSubscription;
-  
+
   Map<String, dynamic>? _leaderboardData;
   Map<String, dynamic>? _summaryData;
   int? _liveLearnedWordsCount;
-  
+
   String? _currentUserId;
   bool _disposed = false;
   bool _initialized = false;
   String? _error;
-  
+
   // Level-up detection
   int _lastAnnouncedLevel = 1;
   LevelData? _currentLevelData;
@@ -33,29 +33,38 @@ class ProfileStatsProvider extends ChangeNotifier {
   bool get isLoading => _stats.isLoading;
   String? get error => _error;
   LevelData? get currentLevelData => _currentLevelData;
-  
+
   /// Single source of truth for learned count
   int get learnedCount => _stats.learnedWordsCount;
-  
+
   /// Debug source for learned count ("subcol" | "fallback")
-  String? get learnedDebugSource => _liveLearnedWordsCount != null ? "subcol" : "fallback";
+  String? get learnedDebugSource =>
+      _liveLearnedWordsCount != null ? "subcol" : "fallback";
 
   /// Initialize streams for the given user
   Future<void> initializeForUser(String userId) async {
     if (_disposed) return;
-    
+
     // Prevent duplicate initializations
-    if (_initialized && _currentUserId == userId && _leaderboardSubscription != null) {
-      Logger.i('[PROFILE] Already initialized for user: $userId', 'ProfileStatsProvider');
+    if (_initialized &&
+        _currentUserId == userId &&
+        _leaderboardSubscription != null) {
+      Logger.i(
+        '[PROFILE] Already initialized for user: $userId',
+        'ProfileStatsProvider',
+      );
       return;
     }
 
     try {
-      Logger.i('[PROFILE] Provider initializing for user: $userId', 'ProfileStatsProvider');
-      
+      Logger.i(
+        '[PROFILE] Provider initializing for user: $userId',
+        'ProfileStatsProvider',
+      );
+
       // Clean up previous subscriptions
       await _cancelSubscriptions();
-      
+
       _currentUserId = userId;
       _initialized = true;
       _error = null;
@@ -65,7 +74,14 @@ class ProfileStatsProvider extends ChangeNotifier {
       // Run migration helper to ensure streak data exists
       await StreakMigrationHelper.migrateUserStreakData();
 
-      Logger.i('[PROFILE] Initializing triple streams for user: $userId', 'ProfileStatsProvider');
+      // CRITICAL: Fetch initial data immediately before setting up streams
+      // This ensures UI shows correct values instantly on app launch
+      await fetchUserStats(userId);
+
+      Logger.i(
+        '[PROFILE] Initializing triple streams for user: $userId',
+        'ProfileStatsProvider',
+      );
 
       // Start leaderboard_stats stream
       _leaderboardSubscription = _firestore
@@ -75,10 +91,16 @@ class ProfileStatsProvider extends ChangeNotifier {
           .listen(
             _onLeaderboardUpdate,
             onError: (error) {
-              Logger.e('[PROFILE] Leaderboard stream error', error, null, 'ProfileStatsProvider');
+              Logger.e(
+                '[PROFILE] Leaderboard stream error',
+                error,
+                null,
+                'ProfileStatsProvider',
+              );
+              // Don't block UI on error, just use defaults
               if (!_disposed) {
-                _error = 'Leaderboard verisi yüklenemedi: ${error.toString()}';
-                _safeNotifyListeners();
+                _leaderboardData = null;
+                _combineAndUpdate();
               }
             },
           );
@@ -96,10 +118,16 @@ class ProfileStatsProvider extends ChangeNotifier {
           .listen(
             _onSummaryUpdate,
             onError: (error) {
-              Logger.e('[PROFILE] Summary stream error', error, null, 'ProfileStatsProvider');
+              Logger.e(
+                '[PROFILE] Summary stream error',
+                error,
+                null,
+                'ProfileStatsProvider',
+              );
+              // Don't block UI on error, just use defaults
               if (!_disposed) {
-                _error = 'Profil verisi yüklenemedi: ${error.toString()}';
-                _safeNotifyListeners();
+                _summaryData = null;
+                _combineAndUpdate();
               }
             },
           );
@@ -116,10 +144,16 @@ class ProfileStatsProvider extends ChangeNotifier {
           .listen(
             _onLearnedWordsUpdate,
             onError: (error) {
-              Logger.e('[PROFILE] Learned words stream error', error, null, 'ProfileStatsProvider');
+              Logger.e(
+                '[PROFILE] Learned words stream error',
+                error,
+                null,
+                'ProfileStatsProvider',
+              );
               // Don't set error for learned words stream - fallback to cached count
               if (!_disposed) {
-                _liveLearnedWordsCount = null; // Clear live count, will fallback to cached
+                _liveLearnedWordsCount =
+                    null; // Clear live count, will fallback to cached
                 _combineAndUpdate();
               }
             },
@@ -127,12 +161,17 @@ class ProfileStatsProvider extends ChangeNotifier {
 
       // Perform reconciliation after streams are set up
       await _performReconciliation(userId);
-      
+
       // Initialize streak system for the user
       await ensureStreakDefaults();
       await checkStreakReset();
     } catch (e) {
-      Logger.e('[PROFILE] Initialization failed', e, null, 'ProfileStatsProvider');
+      Logger.e(
+        '[PROFILE] Initialization failed',
+        e,
+        null,
+        'ProfileStatsProvider',
+      );
       if (!_disposed) {
         _error = 'Profil başlatılamadı: ${e.toString()}';
         _safeNotifyListeners();
@@ -140,25 +179,103 @@ class ProfileStatsProvider extends ChangeNotifier {
     }
   }
 
+  /// Fetch user stats immediately from Firestore (bypasses cache)
+  /// This ensures UI shows correct values instantly on app launch
+  Future<void> fetchUserStats(String userId) async {
+    if (_disposed) return;
+
+    try {
+      Logger.i(
+        '[PROFILE] Fetching initial user stats from Firestore for user: $userId',
+        'ProfileStatsProvider',
+      );
+
+      // Force server read to bypass any cache
+      final leaderboardDoc = await _firestore
+          .collection('leaderboard_stats')
+          .doc(userId)
+          .get(const GetOptions(source: Source.server));
+
+      final summaryDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('stats')
+          .doc('summary')
+          .get(const GetOptions(source: Source.server));
+
+      if (_disposed) return;
+
+      // Store the fetched data
+      _leaderboardData = leaderboardDoc.exists ? leaderboardDoc.data() : null;
+      _summaryData = summaryDoc.exists ? summaryDoc.data() : null;
+
+      // Log the fetched streak data from both sources
+      Logger.i(
+        '[STREAK] Initial fetch completed:\n'
+        '  summaryData currentStreak: ${_summaryData?['currentStreak']} (PRIMARY)\n'
+        '  leaderboardData currentStreak: ${_leaderboardData?['currentStreak']} (fallback)',
+        'ProfileStatsProvider',
+      );
+
+      // Immediately update stats and notify UI
+      _combineAndUpdate();
+
+      Logger.i(
+        '[PROFILE] Initial stats fetched and UI updated with streak: ${_stats.currentStreak}',
+        'ProfileStatsProvider',
+      );
+    } catch (e) {
+      Logger.e(
+        '[PROFILE] Failed to fetch initial user stats',
+        e,
+        null,
+        'ProfileStatsProvider',
+      );
+      // Don't fail initialization, streams will handle updates
+    }
+  }
+
   void _onLeaderboardUpdate(DocumentSnapshot snapshot) {
     if (_disposed) return;
+
+    _leaderboardData =
+        snapshot.exists ? snapshot.data() as Map<String, dynamic>? : null;
     
-    _leaderboardData = snapshot.exists ? snapshot.data() as Map<String, dynamic>? : null;
+    // Debug logging for streak data
+    if (_leaderboardData != null) {
+      Logger.i(
+        '[STREAK] Leaderboard data received: currentStreak=${_leaderboardData!['currentStreak']}, '
+        'longestStreak=${_leaderboardData!['longestStreak']}',
+        'ProfileStatsProvider',
+      );
+    } else {
+      Logger.w(
+        '[STREAK] Leaderboard data is NULL - document may not exist',
+        'ProfileStatsProvider',
+      );
+    }
+    
     _combineAndUpdate();
   }
 
   void _onLearnedWordsUpdate(QuerySnapshot snapshot) {
     if (_disposed) return;
-    
+
     final previousCount = _liveLearnedWordsCount;
     _liveLearnedWordsCount = snapshot.docs.length;
-    
+
     // Log telemetry for learned words count changes
     if (previousCount != null && previousCount != _liveLearnedWordsCount) {
-      Logger.i('[TELEMETRY] learned_words_count_changed: ${previousCount} -> ${_liveLearnedWordsCount} (uid=${_currentUserId})', 'ProfileStatsProvider');
+      Logger.i(
+        '[TELEMETRY] learned_words_count_changed: $previousCount -> $_liveLearnedWordsCount (uid=$_currentUserId)',
+        'ProfileStatsProvider',
+      );
     }
-    
-    Logger.i('[PROFILE] Live learned words count updated: ${_liveLearnedWordsCount}', 'ProfileStatsProvider');
+
+    Logger.i(
+      '[PROFILE] Live learned words count updated: $_liveLearnedWordsCount',
+      'ProfileStatsProvider',
+    );
     _combineAndUpdate();
   }
 
@@ -168,111 +285,153 @@ class ProfileStatsProvider extends ChangeNotifier {
 
     try {
       // Get actual count from subcollection (single snapshot)
-      final learnedWordsSnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('learned_words')
-          .get();
-      
+      final learnedWordsSnapshot =
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('learned_words')
+              .get();
+
       final actualCount = learnedWordsSnapshot.docs.length;
 
       // Get cached count from user document
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .get();
-      
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+
       final userData = userDoc.data();
       final cachedCount = userData?['learnedWordsCount'] as int?;
 
       // Check if reconciliation is needed
-      if (cachedCount != actualCount || cachedCount == null || cachedCount < 0) {
-        Logger.i('[RECONCILE] learnedWordsCount: cached=$cachedCount → actual=$actualCount (uid=$userId)', 'ProfileStatsProvider');
-        
-        // Update cached count to match actual count
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .update({
-          'learnedWordsCount': actualCount,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
+      if (cachedCount != actualCount ||
+          cachedCount == null ||
+          cachedCount < 0) {
+        Logger.i(
+          '[RECONCILE] learnedWordsCount: cached=$cachedCount → actual=$actualCount (uid=$userId)',
+          'ProfileStatsProvider',
+        );
 
-        // Also update leaderboard stats to keep them in sync
-        await _firestore
-            .collection('leaderboard_stats')
-            .doc(userId)
-            .update({
+        // Update cached count to match actual count
+        await _firestore.collection('users').doc(userId).update({
           'learnedWordsCount': actualCount,
           'lastUpdated': FieldValue.serverTimestamp(),
         });
       } else {
-        Logger.i('[RECONCILE] learnedWordsCount: cached=$cachedCount matches actual=$actualCount (uid=$userId)', 'ProfileStatsProvider');
+        Logger.i(
+          '[RECONCILE] learnedWordsCount: cached=$cachedCount matches actual=$actualCount (uid=$userId)',
+          'ProfileStatsProvider',
+        );
       }
     } catch (e) {
-      Logger.e('[PROFILE] Reconciliation failed', e, null, 'ProfileStatsProvider');
+      Logger.e(
+        '[PROFILE] Reconciliation failed',
+        e,
+        null,
+        'ProfileStatsProvider',
+      );
       // Don't fail initialization due to reconciliation errors
     }
   }
 
   void _onSummaryUpdate(DocumentSnapshot snapshot) {
     if (_disposed) return;
+
+    _summaryData =
+        snapshot.exists ? snapshot.data() as Map<String, dynamic>? : null;
     
-    _summaryData = snapshot.exists ? snapshot.data() as Map<String, dynamic>? : null;
+    // Debug logging for streak data from summary
+    if (_summaryData != null) {
+      Logger.i(
+        '[STREAK] Summary data received: currentStreak=${_summaryData!['currentStreak']}, '
+        'longestStreak=${_summaryData!['longestStreak']} (PRIMARY SOURCE)',
+        'ProfileStatsProvider',
+      );
+    } else {
+      Logger.w(
+        '[STREAK] Summary data is NULL - document may not exist at users/{uid}/stats/summary',
+        'ProfileStatsProvider',
+      );
+    }
+    
     _combineAndUpdate();
   }
 
   void _combineAndUpdate() {
     if (_disposed) return;
 
+    // Debug: Log raw data before combining
+    Logger.i(
+      '[STREAK] _combineAndUpdate called with:\n'
+      '  summaryData currentStreak: ${_summaryData?['currentStreak']} (PRIMARY SOURCE)\n'
+      '  leaderboardData currentStreak: ${_leaderboardData?['currentStreak']} (fallback)',
+      'ProfileStatsProvider',
+    );
+
     final newStats = AggregatedProfileStats.fromSources(
       leaderboardData: _leaderboardData,
       summaryData: _summaryData,
-      liveLearnedWordsCount: _liveLearnedWordsCount, // Pass live count as priority
+      liveLearnedWordsCount:
+          _liveLearnedWordsCount, // Pass live count as priority
+    );
+
+    // Debug: Log the parsed streak value
+    Logger.i(
+      '[STREAK] After parsing - newStats.currentStreak: ${newStats.currentStreak}, '
+      'newStats.longestStreak: ${newStats.longestStreak}',
+      'ProfileStatsProvider',
     );
 
     // Compute level data from totalXp
     final totalXp = newStats.totalXp;
     final newLevelData = LevelService.computeLevelData(totalXp);
-    
+
     Logger.i(
       '[LEVEL] compute totalXp=$totalXp -> level=${newLevelData.level}, into=${newLevelData.xpIntoLevel}/${newLevelData.xpNeeded}',
-      'ProfileStatsProvider'
+      'ProfileStatsProvider',
     );
 
     // Check for level-up
     if (newLevelData.level > _lastAnnouncedLevel && !_disposed) {
-      Logger.i('[LEVEL] banner Level ${newLevelData.level} shown', 'ProfileStatsProvider');
+      Logger.i(
+        '[LEVEL] banner Level ${newLevelData.level} shown',
+        'ProfileStatsProvider',
+      );
       _lastAnnouncedLevel = newLevelData.level;
-      
+
       // Mirror level to users/{uid}.level
       _mirrorLevelToFirestore(newLevelData.level);
-      
+
       // Trigger level-up banner (will be handled by UI)
       _triggerLevelUpBanner(newLevelData.level);
     }
 
-    // Log the combined stats
+    // Log the combined stats including streak
     Logger.i(
-      '[PROFILE] combine <- xp=${newStats.totalXp}, quizzes=${newStats.totalQuizzesCompleted}, learned=${newStats.learnedWordsCount}',
-      'ProfileStatsProvider'
+      '[PROFILE] combine <- xp=${newStats.totalXp}, quizzes=${newStats.totalQuizzesCompleted}, '
+      'learned=${newStats.learnedWordsCount}, currentStreak=${newStats.currentStreak}',
+      'ProfileStatsProvider',
     );
 
     // Add telemetry for learned count binding
     final debugSource = _liveLearnedWordsCount != null ? "subcol" : "fallback";
     Logger.i(
-      '[PROFILE] learned bind -> ${newStats.learnedWordsCount} (src=${debugSource})',
-      'ProfileStatsProvider'
+      '[PROFILE] learned bind -> ${newStats.learnedWordsCount} (src=$debugSource)',
+      'ProfileStatsProvider',
     );
-    
+
     // Add HOME-specific telemetry for dashboard updates
     Logger.i(
-      '[HOME] learnedCount updated: ${newStats.learnedWordsCount} (src=${debugSource})',
-      'ProfileStatsProvider'
+      '[HOME] learnedCount updated: ${newStats.learnedWordsCount} (src=$debugSource)',
+      'ProfileStatsProvider',
     );
 
     _stats = newStats;
     _currentLevelData = newLevelData;
+    
+    // Debug: Log final streak value before notifying
+    Logger.i(
+      '[STREAK] Final _stats.currentStreak before notifyListeners: ${_stats.currentStreak}',
+      'ProfileStatsProvider',
+    );
+    
     _safeNotifyListeners();
   }
 
@@ -283,19 +442,30 @@ class ProfileStatsProvider extends ChangeNotifier {
     try {
       // Mirror to users collection
       await LevelService.mirrorLevelToUser(_currentUserId!, level);
-      Logger.i('[LEVEL] mirror write: users/${_currentUserId}.level=$level', 'ProfileStatsProvider');
-      
+      Logger.i(
+        '[LEVEL] mirror write: users/$_currentUserId.level=$level',
+        'ProfileStatsProvider',
+      );
+
       // Also mirror to leaderboard_stats collection
       await _firestore
           .collection('leaderboard_stats')
           .doc(_currentUserId!)
           .update({
-        'level': level,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      });
-      Logger.i('[LEVEL] mirror write: leaderboard_stats/${_currentUserId}.level=$level', 'ProfileStatsProvider');
+            'level': level,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+      Logger.i(
+        '[LEVEL] mirror write: leaderboard_stats/$_currentUserId.level=$level',
+        'ProfileStatsProvider',
+      );
     } catch (e) {
-      Logger.e('[LEVEL] Failed to mirror level to Firestore', e, null, 'ProfileStatsProvider');
+      Logger.e(
+        '[LEVEL] Failed to mirror level to Firestore',
+        e,
+        null,
+        'ProfileStatsProvider',
+      );
     }
   }
 
@@ -326,14 +496,14 @@ class ProfileStatsProvider extends ChangeNotifier {
     if (_disposed || _currentUserId == null) return;
 
     Logger.i('[PROFILE] Manual refresh requested', 'ProfileStatsProvider');
-    
+
     try {
-      // Force refresh by re-reading documents
+      // Force refresh by re-reading documents from server (bypass cache)
       final leaderboardFuture = _firestore
           .collection('leaderboard_stats')
           .doc(_currentUserId!)
           .get(const GetOptions(source: Source.server));
-          
+
       final summaryFuture = _firestore
           .collection('users')
           .doc(_currentUserId!)
@@ -342,13 +512,20 @@ class ProfileStatsProvider extends ChangeNotifier {
           .get(const GetOptions(source: Source.server));
 
       final results = await Future.wait([leaderboardFuture, summaryFuture]);
-      
+
       // Check if disposed after async operation
       if (_disposed) return;
-      
+
       _leaderboardData = results[0].exists ? results[0].data() : null;
       _summaryData = results[1].exists ? results[1].data() : null;
-      
+
+      // Debug: Log refreshed data
+      Logger.i(
+        '[STREAK] Refresh completed - leaderboard currentStreak: ${_leaderboardData?['currentStreak']}, '
+        'summary currentStreak: ${_summaryData?['currentStreak']}',
+        'ProfileStatsProvider',
+      );
+
       _error = null; // Clear any previous errors
       _combineAndUpdate();
     } catch (e) {
@@ -363,7 +540,7 @@ class ProfileStatsProvider extends ChangeNotifier {
   /// Retry initialization after error
   Future<void> retry() async {
     if (_disposed || _currentUserId == null) return;
-    
+
     Logger.i('[PROFILE] Retrying initialization', 'ProfileStatsProvider');
     _error = null;
     await initializeForUser(_currentUserId!);
@@ -373,25 +550,25 @@ class ProfileStatsProvider extends ChangeNotifier {
   @override
   Future<void> dispose() async {
     Logger.i('[PROFILE] Provider disposed cleanly', 'ProfileStatsProvider');
-    
+
     _disposed = true;
     _initialized = false;
-    
+
     await _cancelSubscriptions();
-    
+
     _leaderboardData = null;
     _summaryData = null;
     _liveLearnedWordsCount = null;
     _currentUserId = null;
     _error = null;
-    
+
     super.dispose();
   }
 
   /// Initialize from current Firebase Auth user
   Future<void> initializeFromAuth() async {
     if (_disposed) return;
-    
+
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await initializeForUser(user.uid);
@@ -399,74 +576,133 @@ class ProfileStatsProvider extends ChangeNotifier {
   }
 
   // ========== STREAK MANAGEMENT ==========
-  
+
   /// Ensure initial streak defaults for new users
   Future<void> ensureStreakDefaults() async {
     if (_disposed || _currentUserId == null) return;
-    
+
     try {
       await StreakService.ensureInitialDefaults(_currentUserId!);
-      Logger.i('[STREAK] Initial defaults ensured for user ${_currentUserId}', 'ProfileStatsProvider');
+      Logger.i(
+        '[STREAK] Initial defaults ensured for user $_currentUserId',
+        'ProfileStatsProvider',
+      );
     } catch (e) {
-      Logger.e('[STREAK] Failed to ensure defaults', e, null, 'ProfileStatsProvider');
+      Logger.e(
+        '[STREAK] Failed to ensure defaults',
+        e,
+        null,
+        'ProfileStatsProvider',
+      );
     }
   }
-  
+
   /// Increment streak if it's a new day and notify listeners
   /// Returns true if streak was incremented
   Future<bool> incrementStreakIfNewDay() async {
     if (_disposed || _currentUserId == null) return false;
-    
+
     try {
-      final wasIncremented = await StreakService.incrementIfNewDay(_currentUserId!);
-      
+      Logger.i(
+        '[STREAK] Attempting to increment streak for user $_currentUserId',
+        'ProfileStatsProvider',
+      );
+
+      final wasIncremented = await StreakService.incrementIfNewDay(
+        _currentUserId!,
+      );
+
       if (wasIncremented) {
-        // Refresh data to get updated streak values
+        Logger.i(
+          '[STREAK] Streak was incremented! Refreshing UI data...',
+          'ProfileStatsProvider',
+        );
+        
+        // Refresh data to get updated streak values from Firestore
         await refresh();
-        Logger.i('[STREAK] Streak incremented and UI refreshed for user ${_currentUserId}', 'ProfileStatsProvider');
+        
+        // Force notify listeners to ensure UI updates
+        _safeNotifyListeners();
+        
+        Logger.i(
+          '[STREAK] UI refreshed with new streak value: ${_stats.currentStreak}',
+          'ProfileStatsProvider',
+        );
+      } else {
+        Logger.i(
+          '[STREAK] Streak was not incremented (already updated today)',
+          'ProfileStatsProvider',
+        );
       }
-      
+
       return wasIncremented;
     } catch (e) {
-      Logger.e('[STREAK] Failed to increment streak', e, null, 'ProfileStatsProvider');
+      Logger.e(
+        '[STREAK] Failed to increment streak',
+        e,
+        null,
+        'ProfileStatsProvider',
+      );
       return false;
     }
   }
-  
+
   /// Migrate existing user to proper streak defaults
   Future<void> migrateUserStreak() async {
     if (_disposed || _currentUserId == null) return;
-    
+
     try {
       await StreakService.migrateExistingUser(_currentUserId!);
       // Refresh data to reflect migration changes
       await refresh();
-      Logger.i('[STREAK] User migration completed for ${_currentUserId}', 'ProfileStatsProvider');
+      Logger.i(
+        '[STREAK] User migration completed for $_currentUserId',
+        'ProfileStatsProvider',
+      );
     } catch (e) {
       Logger.e('[STREAK] Migration failed', e, null, 'ProfileStatsProvider');
     }
   }
-  
+
   /// Check and reset streak if user missed days
   Future<void> checkStreakReset() async {
     if (_disposed || _currentUserId == null) return;
-    
+
     try {
       await StreakService.checkAndResetStreakIfNeeded(_currentUserId!);
       // Refresh data to reflect any reset
       await refresh();
-      Logger.i('[STREAK] Streak reset check completed for ${_currentUserId}', 'ProfileStatsProvider');
+      Logger.i(
+        '[STREAK] Streak reset check completed for $_currentUserId',
+        'ProfileStatsProvider',
+      );
     } catch (e) {
-      Logger.e('[STREAK] Streak reset check failed', e, null, 'ProfileStatsProvider');
+      Logger.e(
+        '[STREAK] Streak reset check failed',
+        e,
+        null,
+        'ProfileStatsProvider',
+      );
     }
   }
-  
+
   /// Get current streak value from stats
   int get currentStreak {
     final raw = _stats.currentStreak;
-    return raw > 0 ? raw : 1;
+    
+    // Debug logging every time UI reads the streak
+    if (kDebugMode) {
+      Logger.i(
+        '[STREAK] currentStreak getter called -> returning: $raw (from _stats.currentStreak)',
+        'ProfileStatsProvider',
+      );
+    }
+    
+    // Return raw value directly - don't force minimum of 1
+    // This allows proper display of actual streak values
+    return raw;
   }
-  
+
   /// Get longest streak value from stats
-  int get longestStreak => _stats?.longestStreak ?? 0;
+  int get longestStreak => _stats.longestStreak ?? 0;
 }

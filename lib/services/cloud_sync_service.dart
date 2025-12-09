@@ -2,12 +2,9 @@
 // Comprehensive cloud sync service for offline-first user data management
 
 import 'dart:async';
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../models/user_data.dart';
-import '../models/achievement.dart';
 import '../utils/logger.dart';
 import 'connectivity_service.dart';
 
@@ -15,11 +12,11 @@ part 'cloud_sync_service.g.dart';
 
 /// Sync status for UI indicators
 enum CloudSyncStatus {
-  online,     // 🟢 online & synced
-  syncing,    // 🟡 syncing
-  offline,    // 🔴 offline
-  synced,     // ✅ synced
-  error,      // ❌ error
+  online, // 🟢 online & synced
+  syncing, // 🟡 syncing
+  offline, // 🔴 offline
+  synced, // ✅ synced
+  error, // ❌ error
 }
 
 /// Cached user data structure for Hive storage
@@ -75,7 +72,9 @@ class CachedUserData extends HiveObject {
       totalQuizzesCompleted: map['totalQuizzesCompleted'] ?? 0,
       totalXp: map['totalXp'] ?? 0,
       achievements: Map<String, dynamic>.from(map['achievements'] ?? {}),
-      lastSyncTime: DateTime.parse(map['lastSyncTime'] ?? DateTime.now().toIso8601String()),
+      lastSyncTime: DateTime.parse(
+        map['lastSyncTime'] ?? DateTime.now().toIso8601String(),
+      ),
       isDirty: map['isDirty'] ?? false,
     );
   }
@@ -89,50 +88,57 @@ class CloudSyncService extends ChangeNotifier {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ConnectivityService _connectivity = ConnectivityService();
-  
+
   // Hive boxes
   Box<CachedUserData>? _userDataBox;
-  Box<String>? _syncQueueBox;
-  
+
   // State management
   CloudSyncStatus _syncStatus = CloudSyncStatus.offline;
   bool _isInitialized = false;
   bool _isSyncing = false;
   String? _currentUserId;
-  
+
   // Sync configuration
   static const Duration _syncInterval = Duration(seconds: 30);
   static const Duration _conflictResolutionTimeout = Duration(seconds: 10);
-  
+
   Timer? _syncTimer;
   StreamSubscription<bool>? _connectivitySubscription;
   StreamSubscription? _firestoreSubscription;
-  
+
   // Getters
   CloudSyncStatus get syncStatus => _syncStatus;
   bool get isOnline => _syncStatus != CloudSyncStatus.offline;
   bool get isSyncing => _isSyncing;
   bool get isInitialized => _isInitialized;
-  
+
   CloudSyncService._internal();
 
   /// Initialize the sync service
   Future<void> initialize() async {
     if (_isInitialized) return;
-    
+
     try {
-      Logger.i('🔄 Initializing CloudSyncService...', 'CloudSyncService');
-      
+      Logger.i('Initializing CloudSyncService...', 'CloudSyncService');
+
       // Initialize Hive boxes
       await _initializeHiveBoxes();
-      
+
       // Setup connectivity monitoring
       await _setupConnectivityMonitoring();
-      
+
       _isInitialized = true;
-      Logger.i('✅ CloudSyncService initialized successfully', 'CloudSyncService');
+      Logger.i(
+        '✅ CloudSyncService initialized successfully',
+        'CloudSyncService',
+      );
     } catch (e) {
-      Logger.e('Failed to initialize CloudSyncService', e, null, 'CloudSyncService');
+      Logger.e(
+        'Failed to initialize CloudSyncService',
+        e,
+        null,
+        'CloudSyncService',
+      );
       rethrow;
     }
   }
@@ -144,11 +150,14 @@ class CloudSyncService extends ChangeNotifier {
       if (!Hive.isAdapterRegistered(10)) {
         Hive.registerAdapter(CachedUserDataAdapter());
       }
-      
-      // Open boxes
-      _userDataBox = await Hive.openBox<CachedUserData>('cached_user_data');
-      _syncQueueBox = await Hive.openBox<String>('sync_queue');
-      
+
+      // Open boxes safely
+      if (Hive.isBoxOpen('cached_user_data')) {
+        _userDataBox = Hive.box<CachedUserData>('cached_user_data');
+      } else {
+        _userDataBox = await Hive.openBox<CachedUserData>('cached_user_data');
+      }
+
       Logger.d('Hive boxes initialized successfully', 'CloudSyncService');
     } catch (e) {
       Logger.e('Failed to initialize Hive boxes', e, null, 'CloudSyncService');
@@ -159,10 +168,12 @@ class CloudSyncService extends ChangeNotifier {
   /// Setup connectivity monitoring
   Future<void> _setupConnectivityMonitoring() async {
     // Listen to connectivity changes
-    _connectivitySubscription = _connectivity.onlineStatusStream.listen((bool isOnline) {
+    _connectivitySubscription = _connectivity.onlineStatusStream.listen((
+      bool isOnline,
+    ) {
       _handleConnectivityChange(isOnline);
     });
-    
+
     // Check initial connectivity
     final bool isOnline = _connectivity.isOnline;
     _handleConnectivityChange(isOnline);
@@ -171,17 +182,17 @@ class CloudSyncService extends ChangeNotifier {
   /// Handle connectivity changes
   void _handleConnectivityChange(bool isOnline) {
     final previousStatus = _syncStatus;
-    
+
     if (isOnline) {
       _syncStatus = CloudSyncStatus.online;
-      Logger.i('🌐 Device is online, starting sync', 'CloudSyncService');
+      Logger.i('Device is online, starting sync', 'CloudSyncService');
       _startPeriodicSync();
     } else {
       _syncStatus = CloudSyncStatus.offline;
       Logger.i('📴 Device is offline', 'CloudSyncService');
       _stopPeriodicSync();
     }
-    
+
     if (previousStatus != _syncStatus) {
       notifyListeners();
     }
@@ -190,11 +201,11 @@ class CloudSyncService extends ChangeNotifier {
   /// Start periodic sync when online
   void _startPeriodicSync() {
     _stopPeriodicSync(); // Clear any existing timer
-    
+
     if (_currentUserId != null) {
       // Immediate sync
       _performSync();
-      
+
       // Setup periodic sync
       _syncTimer = Timer.periodic(_syncInterval, (_) {
         if (_syncStatus == CloudSyncStatus.online && !_isSyncing) {
@@ -215,13 +226,13 @@ class CloudSyncService extends ChangeNotifier {
     if (!_isInitialized) {
       await initialize();
     }
-    
+
     _currentUserId = userId;
     Logger.i('👤 User set: $userId', 'CloudSyncService');
-    
+
     // Start Firestore listener for real-time updates
     await _setupFirestoreListener();
-    
+
     // Start sync if online
     if (_syncStatus == CloudSyncStatus.online) {
       _startPeriodicSync();
@@ -231,47 +242,60 @@ class CloudSyncService extends ChangeNotifier {
   /// Setup Firestore listener for real-time updates
   Future<void> _setupFirestoreListener() async {
     if (_currentUserId == null) return;
-    
+
     _firestoreSubscription?.cancel();
-    
+
     try {
       _firestoreSubscription = _firestore
           .collection('users')
           .doc(_currentUserId)
           .snapshots()
           .listen((snapshot) {
-        if (snapshot.exists && !_isSyncing) {
-          _handleFirestoreUpdate(snapshot.data()!);
-        }
-      });
-      
-      Logger.d('Firestore listener setup for user: $_currentUserId', 'CloudSyncService');
+            if (snapshot.exists && !_isSyncing) {
+              _handleFirestoreUpdate(snapshot.data()!);
+            }
+          });
+
+      Logger.d(
+        'Firestore listener setup for user: $_currentUserId',
+        'CloudSyncService',
+      );
     } catch (e) {
-      Logger.e('Failed to setup Firestore listener', e, null, 'CloudSyncService');
+      Logger.e(
+        'Failed to setup Firestore listener',
+        e,
+        null,
+        'CloudSyncService',
+      );
     }
   }
 
   /// Handle Firestore updates (conflict resolution)
   void _handleFirestoreUpdate(Map<String, dynamic> firestoreData) {
     if (_currentUserId == null) return;
-    
+
     try {
       final localData = _userDataBox?.get(_currentUserId!);
-      
+
       if (localData != null) {
         // Check if Firestore data is newer
         final firestoreTimestamp = firestoreData['lastUpdated'] as Timestamp?;
         final localTimestamp = localData.lastSyncTime;
-        
-        if (firestoreTimestamp != null && 
+
+        if (firestoreTimestamp != null &&
             firestoreTimestamp.toDate().isAfter(localTimestamp)) {
-          
-          Logger.i('🔄 Firestore data is newer, updating local cache', 'CloudSyncService');
+          Logger.i(
+            '🔄 Firestore data is newer, updating local cache',
+            'CloudSyncService',
+          );
           _updateLocalFromFirestore(firestoreData);
         }
       } else {
         // No local data, create from Firestore
-        Logger.i('📥 Creating local cache from Firestore data', 'CloudSyncService');
+        Logger.i(
+          '📥 Creating local cache from Firestore data',
+          'CloudSyncService',
+        );
         _updateLocalFromFirestore(firestoreData);
       }
     } catch (e) {
@@ -282,24 +306,31 @@ class CloudSyncService extends ChangeNotifier {
   /// Update local cache from Firestore data
   void _updateLocalFromFirestore(Map<String, dynamic> firestoreData) {
     if (_currentUserId == null) return;
-    
+
     try {
       final cachedData = CachedUserData(
         learnedWordsCount: firestoreData['totalWordsLearned'] ?? 0,
         currentStreak: firestoreData['currentStreak'] ?? 0,
         totalQuizzesCompleted: firestoreData['totalQuizzesTaken'] ?? 0,
         totalXp: firestoreData['totalXp'] ?? 0,
-        achievements: Map<String, dynamic>.from(firestoreData['achievements'] ?? {}),
+        achievements: Map<String, dynamic>.from(
+          firestoreData['achievements'] ?? {},
+        ),
         lastSyncTime: DateTime.now(),
         isDirty: false,
       );
-      
+
       _userDataBox?.put(_currentUserId!, cachedData);
       Logger.d('Local cache updated from Firestore', 'CloudSyncService');
-      
+
       notifyListeners();
     } catch (e) {
-      Logger.e('Error updating local cache from Firestore', e, null, 'CloudSyncService');
+      Logger.e(
+        'Error updating local cache from Firestore',
+        e,
+        null,
+        'CloudSyncService',
+      );
     }
   }
 
@@ -318,36 +349,39 @@ class CloudSyncService extends ChangeNotifier {
     Map<String, dynamic>? achievements,
   }) async {
     if (_currentUserId == null) return;
-    
+
     try {
-      final existing = _userDataBox?.get(_currentUserId!) ?? CachedUserData(
-        learnedWordsCount: 0,
-        currentStreak: 0,
-        totalQuizzesCompleted: 0,
-        totalXp: 0,
-        achievements: {},
-        lastSyncTime: DateTime.now(),
-        isDirty: false,
-      );
-      
+      final existing =
+          _userDataBox?.get(_currentUserId!) ??
+          CachedUserData(
+            learnedWordsCount: 0,
+            currentStreak: 0,
+            totalQuizzesCompleted: 0,
+            totalXp: 0,
+            achievements: {},
+            lastSyncTime: DateTime.now(),
+            isDirty: false,
+          );
+
       final updated = CachedUserData(
         learnedWordsCount: learnedWordsCount ?? existing.learnedWordsCount,
         currentStreak: currentStreak ?? existing.currentStreak,
-        totalQuizzesCompleted: totalQuizzesCompleted ?? existing.totalQuizzesCompleted,
+        totalQuizzesCompleted:
+            totalQuizzesCompleted ?? existing.totalQuizzesCompleted,
         totalXp: totalXp ?? existing.totalXp,
         achievements: achievements ?? existing.achievements,
         lastSyncTime: DateTime.now(),
         isDirty: true, // Mark as needing sync
       );
-      
+
       await _userDataBox?.put(_currentUserId!, updated);
       Logger.d('Local data updated and marked for sync', 'CloudSyncService');
-      
+
       // Trigger immediate sync if online
       if (_syncStatus == CloudSyncStatus.online && !_isSyncing) {
         _performSync();
       }
-      
+
       notifyListeners();
     } catch (e) {
       Logger.e('Error updating local data', e, null, 'CloudSyncService');
@@ -357,30 +391,32 @@ class CloudSyncService extends ChangeNotifier {
   /// Perform bi-directional sync
   Future<void> _performSync() async {
     if (_currentUserId == null || _isSyncing) return;
-    
+
     _isSyncing = true;
     _syncStatus = CloudSyncStatus.syncing;
     notifyListeners();
-    
+
     try {
-      Logger.d('🔄 Starting sync for user: $_currentUserId', 'CloudSyncService');
-      
+      Logger.d(
+        '🔄 Starting sync for user: $_currentUserId',
+        'CloudSyncService',
+      );
+
       final localData = _userDataBox?.get(_currentUserId!);
       if (localData == null || !localData.isDirty) {
         Logger.d('No local changes to sync', 'CloudSyncService');
         return;
       }
-      
+
       // Upload local changes to Firestore
       await _uploadToFirestore(localData);
-      
+
       // Mark as synced
       localData.isDirty = false;
       localData.lastSyncTime = DateTime.now();
       await _userDataBox?.put(_currentUserId!, localData);
-      
-      Logger.i('✅ Sync completed successfully', 'CloudSyncService');
-      
+
+      Logger.i('Sync completed successfully', 'CloudSyncService');
     } catch (e) {
       Logger.e('Sync failed', e, null, 'CloudSyncService');
     } finally {
@@ -393,7 +429,7 @@ class CloudSyncService extends ChangeNotifier {
   /// Upload local data to Firestore
   Future<void> _uploadToFirestore(CachedUserData localData) async {
     if (_currentUserId == null) return;
-    
+
     try {
       final updateData = {
         'totalWordsLearned': localData.learnedWordsCount,
@@ -403,15 +439,20 @@ class CloudSyncService extends ChangeNotifier {
         'achievements': localData.achievements,
         'lastUpdated': FieldValue.serverTimestamp(),
       };
-      
+
       await _firestore
           .collection('users')
           .doc(_currentUserId!)
           .update(updateData);
-      
+
       Logger.d('Data uploaded to Firestore successfully', 'CloudSyncService');
     } catch (e) {
-      Logger.e('Failed to upload data to Firestore', e, null, 'CloudSyncService');
+      Logger.e(
+        'Failed to upload data to Firestore',
+        e,
+        null,
+        'CloudSyncService',
+      );
       rethrow;
     }
   }
@@ -422,8 +463,8 @@ class CloudSyncService extends ChangeNotifier {
       Logger.w('Cannot sync while offline', 'CloudSyncService');
       return;
     }
-    
-    Logger.i('🔄 Manual sync triggered', 'CloudSyncService');
+
+    Logger.i('Manual sync triggered', 'CloudSyncService');
     await _performSync();
   }
 
@@ -432,7 +473,7 @@ class CloudSyncService extends ChangeNotifier {
     _currentUserId = null;
     _firestoreSubscription?.cancel();
     _stopPeriodicSync();
-    
+
     Logger.i('👤 User cleared from sync service', 'CloudSyncService');
   }
 
@@ -475,8 +516,7 @@ class CloudSyncService extends ChangeNotifier {
     _firestoreSubscription?.cancel();
     _stopPeriodicSync();
     _userDataBox?.close();
-    _syncQueueBox?.close();
-    
+
     Logger.i('CloudSyncService disposed', 'CloudSyncService');
     super.dispose();
   }

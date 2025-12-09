@@ -27,7 +27,6 @@ class EnhancedSessionService extends ChangeNotifier {
   
   Timer? _syncTimer;
   StreamSubscription? _userDataSubscription;
-  StreamSubscription? _leaderboardSubscription;
   
   bool _isRealTimeSyncEnabled = false;
   bool _isUpdating = false;
@@ -70,9 +69,6 @@ class EnhancedSessionService extends ChangeNotifier {
       // Listen to user data changes
       _listenToUserDataChanges();
       
-      // Listen to leaderboard changes
-      _listenToLeaderboardChanges();
-      
       Logger.i('Real-time sync enabled', 'EnhancedSessionService');
       notifyListeners();
     } catch (e) {
@@ -85,7 +81,6 @@ class EnhancedSessionService extends ChangeNotifier {
     _isRealTimeSyncEnabled = false;
     _syncTimer?.cancel();
     _userDataSubscription?.cancel();
-    _leaderboardSubscription?.cancel();
     
     Logger.i('Real-time sync disabled', 'EnhancedSessionService');
     notifyListeners();
@@ -112,27 +107,6 @@ class EnhancedSessionService extends ChangeNotifier {
         );
   }
 
-  /// Listen to leaderboard changes in real-time
-  void _listenToLeaderboardChanges() {
-    if (!_sessionService.isAuthenticated) return;
-    
-    final userId = _sessionService.currentUser!.uid;
-    _leaderboardSubscription = _firestore
-        .collection('leaderboard_stats')
-        .doc(userId)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (snapshot.exists) {
-              _handleLeaderboardUpdate(snapshot.data()!);
-            }
-          },
-          onError: (error) {
-            Logger.e('Error listening to leaderboard changes', error, null, 'EnhancedSessionService');
-          },
-        );
-  }
-
   /// Handle user data updates
   void _handleUserDataUpdate(Map<String, dynamic> data) {
     try {
@@ -147,21 +121,6 @@ class EnhancedSessionService extends ChangeNotifier {
       Logger.d('User data updated in real-time', 'EnhancedSessionService');
     } catch (e) {
       Logger.e('Error handling user data update', e, null, 'EnhancedSessionService');
-    }
-  }
-
-  /// Handle leaderboard updates
-  void _handleLeaderboardUpdate(Map<String, dynamic> data) {
-    try {
-      // Cache the updated leaderboard data
-      _offlineStorage.saveLeaderboardCache('user_stats', [data]);
-      
-      // Notify listeners about the update
-      notifyListeners();
-      
-      Logger.d('Leaderboard data updated in real-time', 'EnhancedSessionService');
-    } catch (e) {
-      Logger.e('Error handling leaderboard update', e, null, 'EnhancedSessionService');
     }
   }
 
@@ -226,31 +185,15 @@ class EnhancedSessionService extends ChangeNotifier {
     try {
       final userId = _sessionService.currentUser!.uid;
       
-      // Update both user_data and leaderboard_stats collections immediately
-      final batch = _firestore.batch();
-      
-      // Update user_data
+      // Update user_data collection immediately
       final userDataRef = _firestore
           .collection('users')
           .doc(userId);
       
-      batch.update(userDataRef, {
+      await userDataRef.update({
         'displayName': displayName,
         'lastUpdated': FieldValue.serverTimestamp(),
-      });
-      
-      // Update leaderboard_stats
-      final leaderboardRef = _firestore
-          .collection('leaderboard_stats')
-          .doc(userId);
-      
-      batch.update(leaderboardRef, {
-        'displayName': displayName,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      });
-      
-      // Commit with timeout
-      await batch.commit().timeout(
+      }).timeout(
         Duration(milliseconds: _dbTimeoutMs),
       );
       
@@ -277,9 +220,6 @@ class EnhancedSessionService extends ChangeNotifier {
         final userId = _sessionService.currentUser!.uid;
         await _offlineStorage.saveUserData(userId, {});
       }
-      
-      // Clear leaderboard cache
-      await _offlineStorage.saveLeaderboardCache('user_stats', []);
       
       Logger.d('Relevant caches cleared', 'EnhancedSessionService');
     } catch (e) {

@@ -31,13 +31,13 @@ class FirestoreWordService {
     _listCache.clear();
     _wordCacheLRU.clear();
     _listCacheLRU.clear();
-    debugPrint('FirestoreWordService: Cache cleared');
+
   }
   
   /// Dispose method to clean up resources
   void dispose() {
     clearCache();
-    debugPrint('FirestoreWordService: Disposed');
+
   }
 
   /// Get all public words with pagination
@@ -89,14 +89,13 @@ class FirestoreWordService {
   /// Get words by SRS level for daily learning
   Future<List<Word>> getDailyWordsWithSRS(String userId) async {
     try {
-      debugPrint('🔍 Getting daily words for userId: $userId');
+
       final now = DateTime.now();
 
       // Sanitize userId by using the schema method
       final statsPath = FirestoreSchema.getUserStatsPath(userId);
       final sanitizedUserId =
           statsPath.split('/')[1]; // Extract sanitized userId
-      debugPrint('🔍 Sanitized userId: $sanitizedUserId');
 
       // Get user's word progress
       final progressSnapshot =
@@ -124,7 +123,7 @@ class FirestoreWordService {
 
       return words;
     } catch (e) {
-      debugPrint('Error getting daily words with SRS: $e');
+
       return await getNewWords(userId, limit: 10);
     }
   }
@@ -132,7 +131,6 @@ class FirestoreWordService {
   /// Get new words for user
   Future<List<Word>> getNewWords(String userId, {int limit = 10}) async {
     try {
-      debugPrint('🔍 Getting new words for userId: $userId');
 
       // Sanitize userId by using the schema method
       final statsPath = FirestoreSchema.getUserStatsPath(userId);
@@ -169,7 +167,7 @@ class FirestoreWordService {
 
       return availableWords;
     } catch (e) {
-      debugPrint('Error getting new words: $e');
+
       return [];
     }
   }
@@ -235,7 +233,7 @@ class FirestoreWordService {
         return _mapDocumentToWord(doc.id, data);
       }).toList();
     } catch (e) {
-      debugPrint('Error searching words: $e');
+
       return [];
     }
   }
@@ -258,7 +256,7 @@ class FirestoreWordService {
         return _mapDocumentToWord(doc.id, data);
       }).toList();
     } catch (e) {
-      debugPrint('Error getting words by difficulty: $e');
+
       return [];
     }
   }
@@ -278,7 +276,7 @@ class FirestoreWordService {
         return _mapDocumentToWord(doc.id, data);
       }).toList();
     } catch (e) {
-      debugPrint('Error getting words by tags: $e');
+
       return [];
     }
   }
@@ -306,7 +304,7 @@ class FirestoreWordService {
       words.shuffle();
       return words.take(count).toList();
     } catch (e) {
-      debugPrint('Error getting random words: $e');
+
       return [];
     }
   }
@@ -316,15 +314,13 @@ class FirestoreWordService {
     try {
       // Skip syncing if this is a local-only custom word
       if (word.isCustom == true) {
-        debugPrint('🔒 Skipping Firestore sync for local-only custom word: ${word.word}');
+
         return true; // Return success without syncing
       }
 
       final wordId = _generateWordId(word.word);
-      debugPrint('🔍 Adding custom word: ${word.word} (wordId: $wordId)');
 
       final wordPath = FirestoreSchema.getPublicWordPath(wordId);
-      debugPrint('🔍 Word path: $wordPath');
 
       final wordData = FirestoreSchema.createPublicWord(
         wordId: wordId,
@@ -342,10 +338,9 @@ class FirestoreWordService {
       // Clear cache
       _wordCache.remove(wordId);
 
-      debugPrint('✅ Custom word added: ${word.word}');
       return true;
     } catch (e) {
-      debugPrint('❌ Error adding custom word: $e');
+
       return false;
     }
   }
@@ -355,7 +350,7 @@ class FirestoreWordService {
     try {
       // Skip syncing if this is a local-only custom word
       if (word.isCustom == true) {
-        debugPrint('🔒 Skipping Firestore sync for local-only custom word: ${word.word}');
+
         return true; // Return success without syncing
       }
 
@@ -377,10 +372,9 @@ class FirestoreWordService {
       // Update cache
       _wordCache[wordId] = word;
 
-      debugPrint('✅ Custom word updated: ${word.word}');
       return true;
     } catch (e) {
-      debugPrint('❌ Error updating custom word: $e');
+
       return false;
     }
   }
@@ -393,10 +387,9 @@ class FirestoreWordService {
       // Remove from cache
       _wordCache.remove(wordId);
 
-      debugPrint('✅ Custom word deleted: $wordId');
       return true;
     } catch (e) {
-      debugPrint('❌ Error deleting custom word: $e');
+
       return false;
     }
   }
@@ -404,7 +397,6 @@ class FirestoreWordService {
   /// Get user's custom words
   Future<List<Word>> getCustomWords(String userId) async {
     try {
-      debugPrint('🔍 Getting custom words for userId: $userId');
 
       // Note: createdBy field should also be sanitized when stored
       final snapshot =
@@ -420,7 +412,7 @@ class FirestoreWordService {
         return _mapDocumentToWord(doc.id, data);
       }).toList();
     } catch (e) {
-      debugPrint('Error getting custom words: $e');
+
       return [];
     }
   }
@@ -428,7 +420,6 @@ class FirestoreWordService {
   /// Get favorite words
   Future<List<Word>> getFavoriteWords(String userId) async {
     try {
-      debugPrint('🔍 Getting favorite words for userId: $userId');
 
       // Sanitize userId by using the schema method
       final statsPath = FirestoreSchema.getUserStatsPath(userId);
@@ -457,7 +448,7 @@ class FirestoreWordService {
 
       return words;
     } catch (e) {
-      debugPrint('Error getting favorite words: $e');
+
       return [];
     }
   }
@@ -465,7 +456,6 @@ class FirestoreWordService {
   /// Toggle favorite word
   Future<bool> toggleFavoriteWord(String userId, String wordId) async {
     try {
-      debugPrint('🔍 Toggling favorite for userId: $userId, wordId: $wordId');
 
       // Sanitize userId by using the schema method
       final statsPath = FirestoreSchema.getUserStatsPath(userId);
@@ -483,19 +473,19 @@ class FirestoreWordService {
       if (favoriteDoc.exists) {
         // Remove from favorites
         await favoriteRef.delete();
-        debugPrint('✅ Removed from favorites: $wordId');
+
       } else {
         // Add to favorites
         await favoriteRef.set({
           'wordId': wordId,
           'addedAt': FieldValue.serverTimestamp(),
         });
-        debugPrint('✅ Added to favorites: $wordId');
+
       }
 
       return true;
     } catch (e) {
-      debugPrint('❌ Error toggling favorite word: $e');
+
       return false;
     }
   }
@@ -518,7 +508,7 @@ class FirestoreWordService {
 
       return favoriteDoc.exists;
     } catch (e) {
-      debugPrint('Error checking favorite word: $e');
+
       return false;
     }
   }
@@ -564,7 +554,7 @@ class FirestoreWordService {
         'advancedWords': advancedWords,
       };
     } catch (e) {
-      debugPrint('Error getting word statistics: $e');
+
       return {};
     }
   }

@@ -16,6 +16,7 @@ import '../providers/profile_stats_provider.dart';
 import '../di/locator.dart';
 import 'word_service.dart';
 import 'category_progress_service.dart';
+import 'statistics_service.dart';
 
 class LearnedWordRecord {
   final String docId;
@@ -167,7 +168,6 @@ class LearnedWordsService {
     fallback ??= 'unknown_${DateTime.now().millisecondsSinceEpoch}';
 
     if (kDebugMode) {
-      print('[Firestore] Safe doc id: $fallback');
     }
 
     return fallback;
@@ -218,7 +218,6 @@ class LearnedWordsService {
             .get();
 
     if (kDebugMode) {
-      print(
         '[BACKFILL] Found ${query.docs.length} empty-category learned words.',
       );
     }
@@ -239,17 +238,14 @@ class LearnedWordsService {
           'category': newCategory,
         }, SetOptions(merge: true));
         if (kDebugMode) {
-          print('[BACKFILL] $wordId -> $newCategory');
         }
       } else {
         if (kDebugMode) {
-          print('[BACKFILL] skipped $wordId (no category in assets)');
         }
       }
     }
 
     if (kDebugMode) {
-      print('[BACKFILL] Completed.');
     }
   }
 
@@ -269,14 +265,12 @@ class LearnedWordsService {
 
     if (query.docs.isNotEmpty) {
       if (kDebugMode) {
-        print(
           '[AUTO_BACKFILL] Detected uncategorized learned words. Starting backfill...',
         );
       }
       await backfillLearnedCategories(userId);
     } else {
       if (kDebugMode) {
-        print('[AUTO_BACKFILL] No missing categories detected. Skipping.');
       }
     }
   }
@@ -287,7 +281,6 @@ class LearnedWordsService {
       final docId = _resolveDocId(wordId, word: word);
       if (docId.isEmpty) {
         if (kDebugMode) {
-          print(
             '[Firestore] Skipping learned check due to empty doc id (uid=$userId)',
           );
         }
@@ -409,7 +402,6 @@ class LearnedWordsService {
     final docId = _resolveDocId(safeWord.word, word: safeWord);
     if (docId.isEmpty) {
       if (kDebugMode) {
-        print(
           '[Firestore] Failed to compute safe doc id for learned word (uid=$userId)',
         );
       }
@@ -468,7 +460,6 @@ class LearnedWordsService {
             .doc(docId);
         final userRef = _firestore.collection('users').doc(userId);
         final summaryRef = userRef.collection('stats').doc('summary');
-        final leaderboardRef = _firestore.collection('leaderboard_stats').doc(userId);
         final dayKey = _weeklyActivityDayKey();
 
         await _firestore.runTransaction((tx) async {
@@ -476,7 +467,6 @@ class LearnedWordsService {
           if (!snap.exists) {
             tx.set(docRef, insertPayload, SetOptions(merge: true));
             if (kDebugMode) {
-              print(
                 '[LearnedWordsService] inserted new: ${safeWord.word} (${safeWord.category})',
               );
             }
@@ -494,16 +484,10 @@ class LearnedWordsService {
               'weeklyActivity.$dayKey': FieldValue.increment(1),
             }, SetOptions(merge: true));
 
-            tx.set(leaderboardRef, {
-              'learnedWordsCount': FieldValue.increment(1),
-              'lastUpdated': serverTimestamp,
-            }, SetOptions(merge: true));
-
             addedNewWord = true;
           } else {
             tx.set(docRef, updatePayload, SetOptions(merge: true));
             if (kDebugMode) {
-              print(
                 '[LearnedWordsService] refreshed learned entry for ${safeWord.word}',
               );
             }
@@ -551,13 +535,11 @@ class LearnedWordsService {
               normalizedCategory,
             );
             if (kDebugMode) {
-              print(
                 '[CategoryProgressCache] invalidated for $normalizedCategory',
               );
             }
           } catch (e) {
             if (kDebugMode) {
-              print(
                 '[WARN] Failed to invalidate cache for $normalizedCategory: $e',
               );
             }
@@ -575,6 +557,13 @@ class LearnedWordsService {
       if (addedNewWord) {
         try {
           await SessionService().addXp(20);
+          
+          // Record activity for weekly chart
+          await StatisticsService().recordActivity(
+            userId: userId,
+            xpEarned: 20,
+            learnedWordsCount: 1,
+          );
         } catch (e, stackTrace) {
           Logger.e(
             '[XP] Failed to award XP after learning word $docId',
@@ -591,6 +580,13 @@ class LearnedWordsService {
       await _queueLearnedWordForSync(userId, safeWord, docId);
       try {
         await SessionService().addXp(20);
+        
+        // Record activity for weekly chart even in offline mode
+        await StatisticsService().recordActivity(
+          userId: userId,
+          xpEarned: 20,
+          learnedWordsCount: 1,
+        );
       } catch (err, stackTrace) {
         Logger.e(
           '[XP] Failed to award XP after queuing learned word $docId',
@@ -626,7 +622,6 @@ class LearnedWordsService {
     }
 
     if (kDebugMode) {
-      print('[CLEANUP] Removed $removed invalid learned words.');
     }
   }
 
@@ -675,16 +670,6 @@ class LearnedWordsService {
           'learnedWordsCount': FieldValue.increment(1),
           'weeklyActivity.$dayKey': FieldValue.increment(1),
           'updatedAt': FieldValue.serverTimestamp(),
-        },
-      );
-
-      // Queue leaderboard update with standardized field name
-      await SyncManager().addOperation(
-        path: 'leaderboard_stats/$userId',
-        type: SyncOperationType.update,
-        data: {
-          'learnedWordsCount': FieldValue.increment(1),
-          'lastUpdated': FieldValue.serverTimestamp(),
         },
       );
 
@@ -863,7 +848,6 @@ class LearnedWordsService {
       final docId = _resolveDocId(wordId, word: word);
       if (docId.isEmpty) {
         if (kDebugMode) {
-          print(
             '[Firestore] Skipping unlearn due to empty doc id (uid=$userId)',
           );
         }
@@ -899,9 +883,6 @@ class LearnedWordsService {
         // Update Firestore in transaction to ensure consistency
         final userRef = _firestore.collection('users').doc(userId);
         final summaryRef = userRef.collection('stats').doc('summary');
-        final leaderboardRef = _firestore
-            .collection('leaderboard_stats')
-            .doc(userId);
 
         await _firestore.runTransaction((transaction) async {
           // References
@@ -935,12 +916,6 @@ class LearnedWordsService {
           transaction.set(summaryRef, {
             'learnedWordsCount': FieldValue.increment(-1),
             'updatedAt': serverTimestamp,
-          }, SetOptions(merge: true));
-
-          // Update leaderboard stats with standardized field name
-          transaction.set(leaderboardRef, {
-            'learnedWordsCount': FieldValue.increment(-1),
-            'lastUpdated': serverTimestamp,
           }, SetOptions(merge: true));
 
           Logger.i(
@@ -1021,16 +996,6 @@ class LearnedWordsService {
         data: {
           'learnedWordsCount': FieldValue.increment(-1),
           'updatedAt': FieldValue.serverTimestamp(),
-        },
-      );
-
-      // Queue leaderboard update with standardized field name
-      await SyncManager().addOperation(
-        path: 'leaderboard_stats/$userId',
-        type: SyncOperationType.update,
-        data: {
-          'learnedWordsCount': FieldValue.increment(-1),
-          'lastUpdated': FieldValue.serverTimestamp(),
         },
       );
 

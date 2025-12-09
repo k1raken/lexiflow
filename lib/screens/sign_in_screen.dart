@@ -29,9 +29,7 @@ class _SignInScreenState extends State<SignInScreen> {
     if (_hasCheckedOfflineMode) return;
     _hasCheckedOfflineMode = true;
 
-    // Kısa bir gecikme ile bağlantı durumunu kontrol et
-    await Future.delayed(const Duration(milliseconds: 500));
-    
+    // Gecikme kaldırıldı - anında kontrol
     final syncManager = SyncManager();
     if (!syncManager.isOnline) {
       // İnternet yoksa otomatik olarak misafir moduna geç
@@ -41,9 +39,9 @@ class _SignInScreenState extends State<SignInScreen> {
 
   Future<void> _handleAutoGuestSignIn() async {
     final sessionService = Provider.of<SessionService>(context, listen: false);
-    final user = await sessionService.signInAsGuest();
+    final success = await sessionService.signInAsGuest();
     
-    if (mounted && user != null) {
+    if (mounted && success) {
       // Otomatik misafir girişi başarılı olduğunda bildirim göster
       showLexiflowToast(context, ToastType.info, 'İnternet bağlantısı yok. Misafir modunda devam ediyorsunuz.');
     }
@@ -263,14 +261,14 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       // Always attempt guest login regardless of connectivity
       final sessionService = Provider.of<SessionService>(context, listen: false);
-      final user = await sessionService.signInAsGuest();
+      final success = await sessionService.signInAsGuest();
       
       if (mounted) {
         setState(() => _isLoading = false);
         
-        if (sessionService.isAuthenticated) {
+        if (success) {
           // Navigate to home screen
-          Navigator.of(context).pushReplacementNamed('/home');
+          Navigator.of(context).pushReplacementNamed('/');
         } else {
           showLexiflowToast(
             context,
@@ -331,8 +329,7 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     final sessionService = Provider.of<SessionService>(context, listen: false);
-    final user = await sessionService.signInAsGuest();
-    final success = user != null;
+    final success = await sessionService.signInAsGuest();
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -349,6 +346,8 @@ class _SignInScreenState extends State<SignInScreen> {
 
     return Scaffold(
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -359,168 +358,155 @@ class _SignInScreenState extends State<SignInScreen> {
                     const Color(0xFF1E293B),
                   ]
                 : [
-                    const Color(0xFF43E8D8), // Teal
-                    const Color(0xFF5AB2FF), // Blue
-                    const Color(0xFF4A90E2), // Deep Blue
+                    const Color(0xFF43E8D8),
+                    const Color(0xFF5AB2FF),
+                    const Color(0xFF4A90E2),
                   ],
           ),
         ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // App Icon/Logo
-                  Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: Image.asset(
+                      'assets/logo/lexiflow_logo.png',
+                      width: 120,
+                      height: 120,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.book_rounded,
+                          size: 64,
+                          color: Color(0xFF5AB2FF),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  'LexiFlow',
+                  style: GoogleFonts.inter(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -1,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Kelime öğrenmenin en kolay yolu',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 64),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleGoogleSignIn,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black87,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF5AB2FF),
+                              ),
+                            ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.g_mobiledata,
+                                color: Colors.redAccent,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Google ile Giriş Yap',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : _handleGuestLogin,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white, width: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.person_outline, size: 24),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Misafir Olarak Devam Et',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(30),
-                      child: Image.asset(
-                        'assets/logo/lexiflow_logo.png',
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
-                            Icons.book_rounded,
-                            size: 64,
-                            color: Color(0xFF5AB2FF),
-                          );
-                        },
-                      ),
-                    ),
                   ),
-                  const SizedBox(height: 32),
-
-                  // App Title
-                  Text(
-                    'LexiFlow',
-                    style: GoogleFonts.inter(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: -1,
-                    ),
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  'Misafir modunda ilerlemeniz kaydedilmez',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.white.withOpacity(0.7),
                   ),
-                  const SizedBox(height: 12),
-
-                  // Subtitle
-                  Text(
-                    'Kelime öğrenmenin en kolay yolu',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      color: Colors.white.withOpacity(0.9),
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 64),
-
-                  // Google Sign-In Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handleGoogleSignIn,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black87,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF5AB2FF),
-                                ),
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-      Icons.g_mobiledata, // veya Icons.language, Icons.account_circle
-  color: Colors.redAccent,
-  size: 24,
-    ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Google ile Giriş Yap',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Guest Sign-In Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed: _isLoading ? null : _handleGuestLogin,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white, width: 2),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.person_outline, size: 24),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Misafir Olarak Devam Et',
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Info Text
-                  Text(
-                    'Misafir modunda ilerlemeniz kaydedilmez',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.7),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
         ),

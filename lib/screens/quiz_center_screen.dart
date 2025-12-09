@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/animation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:lexiflow/services/word_loader.dart';
 import 'package:lexiflow/screens/quiz_type_select_screen.dart';
@@ -7,6 +6,8 @@ import 'package:lexiflow/screens/category_quiz_screen.dart';
 import 'package:lexiflow/services/category_progress_service.dart';
 import 'package:lexiflow/di/locator.dart';
 import 'package:lexiflow/services/session_service.dart';
+import 'package:lexiflow/services/ad_service.dart';
+import 'package:lexiflow/utils/feature_flags.dart';
 
 class QuizCenterScreen extends StatefulWidget {
   const QuizCenterScreen({super.key});
@@ -127,64 +128,86 @@ class _QuizCenterScreenState extends State<QuizCenterScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return SafeArea(
-      bottom: false,
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Page Title
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Kelime Pratikleri',
-                style: textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onSurface,
+    // Use contrast strategy: light grey background in light mode for card separation
+    final backgroundColor = isDark
+        ? colorScheme.surface
+        : const Color(0xFFF5F7FA); // Very light grey for light mode
+
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      body: SafeArea(
+        bottom: false,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Page Title
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Kelime Pratikleri',
+                  style: textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-            // General Quiz Card
-            _buildGeneralQuizCard(colorScheme, textTheme),
-            const SizedBox(height: 32),
+              // General Quiz Card
+              _buildGeneralQuizCard(colorScheme, textTheme),
+              const SizedBox(height: 32),
 
-            // Categories Section Title
-            Text(
-              'Kategorilere Göre Quizler',
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Categories Grid
-            if (isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
+              // Categories Section Title
+              Text(
+                'Kategorilere Göre Quizler',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-              )
-            else
-              _buildCategoriesGrid(colorScheme, textTheme),
-          ],
+              ),
+              const SizedBox(height: 20),
+
+              // Categories Grid
+              if (isLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else
+                _buildCategoriesGrid(colorScheme, textTheme),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildGeneralQuizCard(ColorScheme colorScheme, TextTheme textTheme) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Card(
+      // Pure white in light mode for contrast
+      color: isDark ? null : Colors.white,
       elevation: 6,
       shadowColor: colorScheme.shadow.withOpacity(0.2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: InkWell(
-        onTap: () {
+        onTap: () async {
+          final adService = locator<AdService>();
+          final proceed =
+              FeatureFlags.adsEnabled
+                  ? await adService.enforceRewardedGateIfNeeded(
+                    context: context,
+                    grantXpOnReward: true,
+                  )
+                  : true;
+          if (!proceed) return;
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -305,24 +328,33 @@ class _QuizCenterScreenState extends State<QuizCenterScreen> {
     return SizedBox(
       height: 180,
       child: Card(
-        // TODO: Theme adaptive card color fix applied
-        // Use theme-aware background instead of hardcoded dark color
-        color: Theme.of(context).cardColor,
+        // Pure white background in light mode for contrast against grey background
+        color: isDark ? Theme.of(context).cardColor : Colors.white,
         clipBehavior: Clip.hardEdge,
-        // TODO: Added subtle border for visual consistency with Home cards
+        elevation: 4, // Keep elevation for shadow effect
+        shadowColor: colorScheme.shadow.withOpacity(0.15),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withOpacity(0.2),
-            width: 1,
-          ),
+          // Remove border in light mode - rely on shadow and background contrast
+          side: isDark
+              ? BorderSide(
+                color: colorScheme.outlineVariant.withOpacity(0.2),
+                width: 1,
+              )
+              : BorderSide.none,
         ),
         child: InkWell(
-          onTap: () {
+          onTap: () async {
             final categoryData = categories[categoryKey]!;
+            final adService = locator<AdService>();
+            final proceed =
+                FeatureFlags.adsEnabled
+                    ? await adService.enforceRewardedGateIfNeeded(
+                      context: context,
+                      grantXpOnReward: true,
+                    )
+                    : true;
+            if (!proceed) return;
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -411,24 +443,29 @@ class _QuizCenterScreenState extends State<QuizCenterScreen> {
                             duration: const Duration(milliseconds: 500),
                             child: Text(
                               percent == 0
-                                  ? 'Not learned yet'
-                                  : '${percent.toStringAsFixed(1)}% learned',
+                                  ? 'Henüz öğrenilmedi'
+                                  : '${percent.toStringAsFixed(1)}% öğrenildi',
                               textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            // Percentage label color adapts to theme and state
-                            color: percent == 0
-                                ? (isDark
-                                    ? Colors.grey.shade400
-                                    : colorScheme.onSurface.withOpacity(0.6))
-                                : (isDark
-                                    ? Colors.white70
-                                    : colorScheme.onSurface.withOpacity(0.8)),
-                            fontWeight: FontWeight.w500,
+                              style: TextStyle(
+                                fontSize: 12,
+                                // Percentage label color adapts to theme and state
+                                color:
+                                    percent == 0
+                                        ? (isDark
+                                            ? Colors.grey.shade400
+                                            : colorScheme.onSurface.withOpacity(
+                                              0.6,
+                                            ))
+                                        : (isDark
+                                            ? Colors.white70
+                                            : colorScheme.onSurface.withOpacity(
+                                              0.8,
+                                            )),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           // Animated progress bar (Hero) with unique tag to avoid collisions
                           Hero(
                             tag: progressHeroTag,
@@ -460,9 +497,11 @@ class _QuizCenterScreenState extends State<QuizCenterScreen> {
                                     value: value,
                                     minHeight: 6,
                                     // Progress background adapts to theme
-                                    backgroundColor: isDark
-                                        ? Colors.grey.shade800
-                                        : colorScheme.surfaceVariant,
+                                    backgroundColor:
+                                        isDark
+                                            ? Colors.grey.shade800
+                                            : colorScheme
+                                                .surfaceContainerHighest,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       _getCategoryColor(categoryKey),
                                     ),

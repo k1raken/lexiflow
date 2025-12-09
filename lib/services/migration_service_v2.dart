@@ -23,7 +23,6 @@ class MigrationServiceV2 {
       // Check if user has old data structure
       return await FirestoreSchemaV2.hasPublicWordsDependencies(userId);
     } catch (e) {
-      print('Migration check error: $e');
       return false;
     }
   }
@@ -31,7 +30,6 @@ class MigrationServiceV2 {
   /// Migrate user data from old structure to V2
   static Future<bool> migrateUserData(String userId) async {
     try {
-      print('Starting migration for user: $userId');
       
       final firestore = FirebaseFirestore.instance;
       final batch = firestore.batch();
@@ -54,11 +52,9 @@ class MigrationServiceV2 {
       // Mark migration as completed
       await _markMigrationCompleted(userId);
       
-      print('Migration completed for user: $userId');
       return true;
       
     } catch (e) {
-      print('Migration failed for user $userId: $e');
       return false;
     }
   }
@@ -90,9 +86,7 @@ class MigrationServiceV2 {
         ));
       }
       
-      print('Migrated ${learnedWordsSnapshot.docs.length} learned words');
     } catch (e) {
-      print('Error migrating learned words: $e');
     }
   }
   
@@ -124,9 +118,7 @@ class MigrationServiceV2 {
         ));
       }
       
-      print('Migrated ${progressData.length} word progress records');
     } catch (e) {
-      print('Error migrating word progress: $e');
     }
   }
   
@@ -160,9 +152,7 @@ class MigrationServiceV2 {
         ));
       }
       
-      print('Migrated ${dailyWordsSnapshot.docs.length} daily word records');
     } catch (e) {
-      print('Error migrating daily words: $e');
     }
   }
   
@@ -188,9 +178,7 @@ class MigrationServiceV2 {
         lastActivityDate: DateTime.now(),
       ), SetOptions(merge: true));
       
-      print('Created user stats');
     } catch (e) {
-      print('Error creating user stats: $e');
     }
   }
   
@@ -253,7 +241,6 @@ class MigrationServiceV2 {
       await box.put('${_migrationKey}_$userId', 'completed');
       await box.put('${_migrationKey}_${userId}_date', DateTime.now().toIso8601String());
     } catch (e) {
-      print('Error marking migration completed: $e');
     }
   }
   
@@ -274,7 +261,6 @@ class MigrationServiceV2 {
       await box.delete('${_migrationKey}_$userId');
       await box.delete('${_migrationKey}_${userId}_date');
     } catch (e) {
-      print('Error resetting migration status: $e');
     }
   }
 }

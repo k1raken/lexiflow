@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/word_model.dart';
 import '../services/ad_service.dart';
+import '../utils/feature_flags.dart';
 import '../services/analytics_service.dart';
 import '../services/user_service.dart';
 import '../services/word_service.dart';
@@ -273,36 +274,18 @@ class _LearnedQuizScreenState extends State<LearnedQuizScreen> {
         return;
       }
 
-      Logger.d('Attempting to show rewarded ad', _tag);
-      final adShown = await widget.adService.showRewardedAd();
-
-      if (!adShown) {
-        Logger.w('Rewarded ad not available or failed to show', _tag);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Ödüllü reklam henüz hazır değil. Lütfen kısa süre sonra tekrar dene.',
-                  ),
-                ),
-              ],
-            ),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+      Logger.d('Enforcing rewarded ad gate', _tag);
+      final proceed = FeatureFlags.adsEnabled
+          ? await widget.adService.enforceRewardedGateIfNeeded(
+              context: context,
+              grantXpOnReward: true,
+            )
+          : true;
+      if (!proceed) {
+        Logger.w('Ad gate blocked quiz start', _tag);
         setState(() => _isLoading = false);
         return;
       }
-
-      Logger.success('Rewarded ad shown successfully', _tag);
 
       if (!mounted) return;
 
@@ -319,6 +302,7 @@ class _LearnedQuizScreenState extends State<LearnedQuizScreen> {
         _tag,
       );
 
+      if (!mounted) return;
       await Navigator.push(
         context,
         MaterialPageRoute(

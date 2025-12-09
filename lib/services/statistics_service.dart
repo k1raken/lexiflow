@@ -64,7 +64,8 @@ class StatisticsService {
 
   /// Get weekly activity data with caching and optimization
   Stream<List<Map<String, dynamic>>> getWeeklyActivity(String userId) {
-    final startDate = DateTime.now().subtract(const Duration(days: 7));
+    final now = DateTime.now();
+    final startDate = now.subtract(const Duration(days: 6)); // Son 7 gün (bugün dahil)
     final startDateStr = _formatDate(startDate);
     
     Logger.d('Fetching weekly activity for user $userId from $startDateStr', _tag);
@@ -85,15 +86,36 @@ class StatisticsService {
         .map((snapshot) {
           Logger.d('Weekly activity snapshot received: ${snapshot.docs.length} days', _tag);
           
-          final data = snapshot.docs.map((doc) {
+          // Son 7 günün tüm tarihlerini oluştur
+          final allDates = List.generate(7, (index) {
+            final date = now.subtract(Duration(days: 6 - index));
+            return _formatDate(date);
+          });
+          
+          // Mevcut verileri map'e dönüştür
+          final existingData = <String, Map<String, dynamic>>{};
+          for (final doc in snapshot.docs) {
             final docData = doc.data();
-            // Safe type casting to prevent FieldValue errors
-            return {
-              'date': docData['date'],
-              'xpEarned': docData['xpEarned'] is int ? docData['xpEarned'] : 0,
-              'learnedWordsCount': docData['learnedWordsCount'] is int ? docData['learnedWordsCount'] : (docData['wordsLearned'] is int ? docData['wordsLearned'] : 0), // fallback for migration
-              'quizzesCompleted': docData['quizzesCompleted'] is int ? docData['quizzesCompleted'] : 0,
-              'lastUpdated': docData['lastUpdated'],
+            final date = docData['date'] as String?;
+            if (date != null) {
+              existingData[date] = {
+                'date': date,
+                'xpEarned': docData['xpEarned'] is int ? docData['xpEarned'] : 0,
+                'learnedWordsCount': docData['learnedWordsCount'] is int ? docData['learnedWordsCount'] : (docData['wordsLearned'] is int ? docData['wordsLearned'] : 0),
+                'quizzesCompleted': docData['quizzesCompleted'] is int ? docData['quizzesCompleted'] : 0,
+                'lastUpdated': docData['lastUpdated'],
+              };
+            }
+          }
+          
+          // Tüm 7 gün için veri oluştur (eksik günler için 0 değerleri)
+          final data = allDates.map((date) {
+            return existingData[date] ?? {
+              'date': date,
+              'xpEarned': 0,
+              'learnedWordsCount': 0,
+              'quizzesCompleted': 0,
+              'lastUpdated': null,
             };
           }).toList();
           

@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/flashcard_models.dart';
 import '../../providers/cards_provider.dart';
-import '../../utils/lexiflow_colors.dart';
+import '../../utils/design_system.dart';
 import 'card_set_screen.dart';
 
 class CardsHomeScreen extends StatefulWidget {

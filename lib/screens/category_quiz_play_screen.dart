@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../models/word_model.dart';
 import '../services/word_service.dart';
 import '../services/user_service.dart';
 import '../services/quiz_generator.dart';

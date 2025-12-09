@@ -2,36 +2,38 @@
 // Modern WordFlow Design System
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Primary Colors
-  static const Color primary = Color(0xFF6366F1); // Modern mor
-  static const Color primaryLight = Color(0xFF8B5CF6); // Açık mor
-  static const Color primaryDark = Color(0xFF4F46E5); // Koyu mor
+  // Primary Colors (LexiFlow Turquoise Brand)
+  static const Color primary = Color(0xFF33C4B3); // LexiFlow Primary
+  static const Color primaryLight = Color(0xFF70E1F5); // Lighter Turquoise
+  static const Color primaryDark = Color(0xFF005F5A); // Darker Turquoise
 
   // Secondary Colors
-  static const Color secondary = Color(0xFF06D6A0); // Yeşil
-  static const Color secondaryLight = Color(0xFF4ECDC4); // Açık yeşil
+  static const Color secondary = Color(0xFF2DD4BF); // LexiFlow Secondary
+  static const Color secondaryLight = Color(0xFF6BE8D8); // Lighter Secondary
+  static const Color accent = Color(0xFF30C6D9); // LexiFlow Accent
 
   // Status Colors
-  static const Color success = Color(0xFF06D6A0); // Yeşil
-  static const Color error = Color(0xFFEF476F); // Kırmızı
-  static const Color warning = Color(0xFFFFD166); // Sarı
-  static const Color info = Color(0xFF3B82F6); // Mavi
+  static const Color success = Color(0xFF06D6A0); // Green
+  static const Color error = Color(0xFFEF476F); // Red
+  static const Color warning = Color(0xFFFFD166); // Yellow
+  static const Color info = Color(0xFF3B82F6); // Blue
 
   // Text Colors
-  static const Color textPrimary = Color(0xFF1E293B); // Koyu gri
-  static const Color textSecondary = Color(0xFF64748B); // Gri
-  static const Color textTertiary = Color(0xFF94A3B8); // Açık gri
+  static const Color textPrimary = Color(0xFF1E293B); // Dark Slate
+  static const Color textSecondary = Color(0xFF64748B); // Slate
+  static const Color textTertiary = Color(0xFF94A3B8); // Light Slate
 
   // Background Colors
-  static const Color background = Color(0xFFF8FAFC); // Açık gri
-  static const Color surface = Color(0xFFFFFFFF); // Beyaz
-  static const Color surfaceVariant = Color(0xFFF1F5F9); // Yüzey varyantı
+  static const Color background = Color(0xFFF8FAFC); // Light Gray
+  static const Color surface = Color(0xFFFFFFFF); // White
+  static const Color surfaceVariant = Color(0xFFF1F5F9); // Surface Variant
 
   // Border Colors
   static const Color border = Color(0xFFE2E8F0); // Border
-  static const Color borderLight = Color(0xFFF1F5F9); // Açık border
+  static const Color borderLight = Color(0xFFF1F5F9); // Light Border
 
   // Gradient Colors
   static const List<Color> primaryGradient = [primary, primaryLight];
@@ -42,13 +44,13 @@ class AppColors {
 // Dark Mode Colors
 class AppDarkColors {
   // Primary Colors
-  static const Color primary = Color(0xFF818CF8); // Lighter purple for dark
-  static const Color primaryLight = Color(0xFFA78BFA); // Even lighter purple
-  static const Color primaryDark = Color(0xFF6366F1); // Original purple
+  static const Color primary = Color(0xFF33C4B3); // LexiFlow Primary
+  static const Color primaryLight = Color(0xFF70E1F5); // Lighter Turquoise
+  static const Color primaryDark = Color(0xFF005F5A); // Darker Turquoise
 
   // Secondary Colors
-  static const Color secondary = Color(0xFF4ECDC4); // Teal
-  static const Color secondaryLight = Color(0xFF06D6A0); // Green
+  static const Color secondary = Color(0xFF2DD4BF); // LexiFlow Secondary
+  static const Color secondaryLight = Color(0xFF00524D); // Darker Secondary for Dark Mode
 
   // Status Colors
   static const Color success = Color(0xFF4ECDC4); // Teal
@@ -58,17 +60,17 @@ class AppDarkColors {
 
   // Text Colors
   static const Color textPrimary = Color(0xFFFFFFFF); // White
-  static const Color textSecondary = Color(0xFFB0B0B0); // Light gray
-  static const Color textTertiary = Color(0xFF808080); // Medium gray
+  static const Color textSecondary = Color(0xFFB0B0B0); // Light Gray
+  static const Color textTertiary = Color(0xFF808080); // Medium Gray
 
   // Background Colors
-  static const Color background = Color(0xFF121212); // Dark background
-  static const Color surface = Color(0xFF1E1E1E); // Dark surface
-  static const Color surfaceVariant = Color(0xFF2D2D2D); // Dark surface variant
+  static const Color background = Color(0xFF121212); // Dark Background
+  static const Color surface = Color(0xFF1E1E1E); // Dark Surface
+  static const Color surfaceVariant = Color(0xFF2D2D2D); // Dark Surface Variant
 
   // Border Colors
-  static const Color border = Color(0xFF404040); // Dark border
-  static const Color borderLight = Color(0xFF2D2D2D); // Light dark border
+  static const Color border = Color(0xFF404040); // Dark Border
+  static const Color borderLight = Color(0xFF2D2D2D); // Light Dark Border
 
   // Gradient Colors
   static const List<Color> primaryGradient = [primary, primaryLight];
@@ -221,6 +223,9 @@ class AppSpacing {
   static const double lg = 24.0;
   static const double xl = 32.0;
   static const double xxl = 48.0;
+  
+  // Screen Padding
+  static const double screenPadding = 24.0;
 }
 
 class AppGradients {
@@ -614,3 +619,188 @@ class ModernProgressIndicator extends StatelessWidget {
     );
   }
 }
+
+// --- LexiFlow Legacy/Brand Support ---
+
+ColorScheme blendWithLexiFlowAccent(ColorScheme scheme) {
+  return scheme.copyWith(
+    primary: Color.lerp(scheme.primary, AppColors.primary, 0.3)!,
+    primaryContainer:
+        Color.lerp(scheme.primaryContainer, AppColors.primary, 0.35)!,
+    secondary: Color.lerp(scheme.secondary, AppColors.secondary, 0.3)!,
+    secondaryContainer:
+        Color.lerp(scheme.secondaryContainer, AppColors.secondary, 0.35)!,
+    tertiary: Color.lerp(scheme.tertiary, AppColors.accent, 0.3)!,
+    tertiaryContainer:
+        Color.lerp(scheme.tertiaryContainer, AppColors.accent, 0.35)!,
+  );
+}
+
+class LexiFlowCardsPalette {
+  const LexiFlowCardsPalette({
+    required this.primary,
+    required this.secondary,
+    required this.accent,
+    required this.background,
+    required this.surface,
+    required this.card,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.shadowColor,
+    required this.gradient,
+  });
+
+  factory LexiFlowCardsPalette.fromScheme(
+    ColorScheme scheme, {
+    required Brightness brightness,
+  }) {
+    final tintedScheme = blendWithLexiFlowAccent(scheme);
+    final isDark = brightness == Brightness.dark;
+
+    return LexiFlowCardsPalette(
+      primary: tintedScheme.primary,
+      secondary: tintedScheme.secondary,
+      accent: tintedScheme.tertiary,
+      background: scheme.surface,
+      surface: scheme.surface,
+      card: isDark ? scheme.surfaceContainerHighest : scheme.surface,
+      textPrimary: scheme.onSurface,
+      textSecondary: scheme.onSurfaceVariant,
+      shadowColor:
+          isDark
+              ? Colors.black.withOpacity(0.35)
+              : Colors.black.withOpacity(0.08),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          tintedScheme.primaryContainer.withOpacity(0.9),
+          tintedScheme.secondaryContainer.withOpacity(0.9),
+        ],
+      ),
+    );
+  }
+
+  final Color primary;
+  final Color secondary;
+  final Color accent;
+  final Color background;
+  final Color surface;
+  final Color card;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color shadowColor;
+  final Gradient gradient;
+}
+
+class LexiFlowCardsTheme {
+  const LexiFlowCardsTheme._();
+
+  static LexiFlowCardsPalette palette(BuildContext context) {
+    final theme = Theme.of(context);
+    return LexiFlowCardsPalette.fromScheme(
+      theme.colorScheme,
+      brightness: theme.brightness,
+    );
+  }
+
+  static LexiFlowCardsTypography typography(BuildContext context) {
+    final currentPalette = palette(context);
+    return LexiFlowCardsTypography(currentPalette);
+  }
+}
+
+class LexiFlowCardsTypography {
+  LexiFlowCardsTypography(this.palette);
+
+  final LexiFlowCardsPalette palette;
+
+  TextStyle get headline => GoogleFonts.poppins(
+    fontSize: 24,
+    fontWeight: FontWeight.w600,
+    color: palette.textPrimary,
+    height: 1.3,
+  );
+
+  TextStyle get title => GoogleFonts.poppins(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    color: palette.textPrimary,
+    height: 1.35,
+  );
+
+  TextStyle get body => GoogleFonts.inter(
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    color: palette.textSecondary,
+    height: 1.5,
+  );
+
+  TextStyle get label => GoogleFonts.inter(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    color: palette.textPrimary,
+    letterSpacing: 0.2,
+  );
+
+  TextStyle get button => GoogleFonts.inter(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: palette.surface,
+    letterSpacing: 0.2,
+  );
+}
+
+extension LexiFlowTypographyExtension on BuildContext {
+  LexiFlowCardsTypography get cardsTypography =>
+      LexiFlowCardsTheme.typography(this);
+
+  LexiFlowCardsPalette get cardsPalette => LexiFlowCardsTheme.palette(this);
+}
+
+extension ColorOpacityExt on Color {
+  Color withOpacityFraction(double opacity) =>
+      withAlpha((opacity.clamp(0.0, 1.0) * 255).round());
+}
+
+const ColorScheme lexiflowFallbackLightScheme = ColorScheme.light(
+  primary: AppColors.primary,
+  onPrimary: Colors.white,
+  primaryContainer: AppColors.primaryLight,
+  onPrimaryContainer: AppColors.textPrimary,
+  secondary: AppColors.secondary,
+  onSecondary: Colors.white,
+  secondaryContainer: AppColors.secondaryLight,
+  onSecondaryContainer: AppColors.textPrimary,
+  tertiary: AppColors.accent,
+  onTertiary: Colors.white,
+  tertiaryContainer: AppColors.accent,
+  onTertiaryContainer: AppColors.textPrimary,
+  surface: AppColors.surface,
+  surfaceContainerHighest: AppColors.surfaceVariant,
+  onSurface: AppColors.textPrimary,
+  onSurfaceVariant: AppColors.textSecondary,
+  outline: AppColors.border,
+  outlineVariant: AppColors.borderLight,
+);
+
+const ColorScheme lexiflowFallbackDarkScheme = ColorScheme.dark(
+  primary: AppDarkColors.primary,
+  onPrimary: Colors.black,
+  primaryContainer: AppDarkColors.primaryDark,
+  onPrimaryContainer: Colors.white,
+  secondary: AppDarkColors.secondary,
+  onSecondary: Colors.black,
+  secondaryContainer: AppDarkColors.secondaryLight,
+  onSecondaryContainer: Colors.white,
+  tertiary: AppColors.accent,
+  onTertiary: Colors.black,
+  tertiaryContainer: AppColors.accent,
+  onTertiaryContainer: Colors.white,
+  surface: AppDarkColors.surface,
+  surfaceContainerHighest: AppDarkColors.surfaceVariant,
+  onSurface: AppDarkColors.textPrimary,
+  onSurfaceVariant: AppDarkColors.textSecondary,
+  outline: AppDarkColors.border,
+  outlineVariant: AppDarkColors.borderLight,
+);

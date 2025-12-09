@@ -46,7 +46,6 @@ class WordLoader {
       // Load words from assets
       // Check cache first (unless force refresh is requested)
       if (!forceRefresh && _isCacheValid(category)) {
-        print(
           '📋 Using cached words for category: $category (${_categoryCache[category]!.length} words)',
         );
         assetWords = List.from(
@@ -63,7 +62,6 @@ class WordLoader {
           final wordService = locator<WordService>();
           final allWords = await wordService.getAllWordsFromLocal();
 
-          print(
             '📘 Loaded ${allWords.length} words from 1kwords.json for category: 1K Kelime',
           );
 
@@ -73,7 +71,6 @@ class WordLoader {
           return allWords;
         }
 
-        print('📥 Loading words from assets for category: $category');
         final String jsonString = await rootBundle.loadString(
           '$_assetsPath$category.json',
         );
@@ -84,7 +81,6 @@ class WordLoader {
         _categoryCache[category] = assetWords;
         _cacheTimestamps[category] = DateTime.now();
 
-        print(
           '✅ Loaded and cached ${assetWords.length} words for category: $category',
         );
       }
@@ -93,7 +89,6 @@ class WordLoader {
       if (category == 'daily' ||
           category == 'general' ||
           category == 'random') {
-        print('📋 Skipping custom merge for category: $category');
         return [
           ...assetWords,
         ]; // ensures 10 words still load from default source
@@ -124,28 +119,23 @@ class WordLoader {
           allWords.add(customWord);
           wordSet.add(wordKey);
         } else {
-          print('⚠️ Skipping duplicate custom word: ${customWord.word}');
         }
       }
 
-      print(
         '✅ Total words for category $category: ${allWords.length} (${assetWords.length} from assets + ${customWords.length} custom)',
       );
       return allWords;
     } catch (e) {
-      print('❌ Error loading words for category $category: $e');
 
       // Fallback: try to return only custom words if asset loading fails
       try {
         final customWords = LocalWordCacheService().getCustomWordsByCategory(
           category,
         );
-        print(
           '📋 Fallback: returning ${customWords.length} custom words for category: $category',
         );
         return customWords;
       } catch (customError) {
-        print('❌ Error loading custom words as fallback: $customError');
         return [];
       }
     }
@@ -199,14 +189,12 @@ class WordLoader {
   static void clearCategoryCache(String category) {
     _categoryCache.remove(category);
     _cacheTimestamps.remove(category);
-    print('🗑️ Cleared cache for category: $category');
   }
 
   /// Clear all cached word lists
   static void clearAllCache() {
     _categoryCache.clear();
     _cacheTimestamps.clear();
-    print('🗑️ Cleared all word cache');
   }
 
   /// Get cache statistics for debugging

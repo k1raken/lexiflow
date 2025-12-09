@@ -1,8 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 part 'word_model.g.dart';
 
 @HiveType(typeId: 0)
 class Word extends HiveObject {
+  @HiveField(14)
+  final String id;
   @HiveField(0)
   final String word;
   @HiveField(1)
@@ -33,6 +37,7 @@ class Word extends HiveObject {
   final DateTime? createdAt; // When the word was created/added
 
   Word({
+    this.id = '',
     required this.word,
     required this.meaning,
     required this.example,
@@ -49,30 +54,55 @@ class Word extends HiveObject {
     this.createdAt,
   });
 
-  factory Word.fromJson(Map<String, dynamic> json) => Word(
-    word: json['word'] ?? '',
-    meaning: json['meaning'] ?? '',
-    example: json['example'] ?? json['exampleSentence'] ?? '',
-    tr: json['tr'] ?? '',
-    exampleSentence: json['exampleSentence'] ?? json['example'] ?? '',
-    isFavorite: json['isFavorite'] ?? false,
-    nextReviewDate:
-        json['nextReviewDate'] != null
-            ? DateTime.tryParse(json['nextReviewDate'])
-            : null,
-    interval: json['interval'] ?? 1,
-    correctStreak: json['correctStreak'] ?? 0,
-    tags: (json['tags'] as List?)?.map((e) => e.toString()).toList() ?? [],
-    srsLevel: json['srsLevel'] ?? 0,
-    isCustom: json['isCustom'] ?? false,
-    category: json['category'],
-    createdAt: json['createdAt'] != null
-        ? DateTime.tryParse(json['createdAt'])
-        : null,
-  );
+  factory Word.fromJson(Map<String, dynamic> json, [String docId = '']) {
+    final resolvedWord = (json['word'] ??
+            json['text'] ??
+            json['value'] ??
+            json['name'] ??
+            '')
+        .toString();
+    if (resolvedWord.isEmpty) {
+
+    }
+    final resolvedId = docId.isNotEmpty
+        ? docId
+        : (json['id'] ?? json['wordId'] ?? resolvedWord).toString();
+    
+    // Helper function to parse DateTime from various formats
+    DateTime? parseDateTime(dynamic value) {
+      if (value == null) return null;
+      if (value is DateTime) return value;
+      if (value is String) return DateTime.tryParse(value);
+      // Handle Firestore Timestamp
+      if (value is Timestamp) {
+        return value.toDate();
+      }
+      return null;
+    }
+    
+    return Word(
+      id: resolvedId,
+      word: resolvedWord,
+      meaning: json['meaning']?.toString() ?? '',
+      example: (json['example'] ?? json['exampleSentence'] ?? '').toString(),
+      tr: json['tr']?.toString() ?? '',
+      exampleSentence:
+          (json['exampleSentence'] ?? json['example'] ?? '').toString(),
+      isFavorite: json['isFavorite'] ?? false,
+      nextReviewDate: parseDateTime(json['nextReviewDate']),
+      interval: json['interval'] ?? 1,
+      correctStreak: json['correctStreak'] ?? 0,
+      tags: (json['tags'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      srsLevel: json['srsLevel'] ?? 0,
+      isCustom: json['isCustom'] ?? false,
+      category: json['category'],
+      createdAt: parseDateTime(json['createdAt']),
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'word': word,
       'meaning': meaning,
       'example': example,

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:animations/animations.dart';
+import 'package:lexiflow/utils/transitions.dart';
+import 'package:lexiflow/utils/feature_flags.dart';
 import 'dart:math';
 import '../models/word_model.dart';
 import '../services/word_loader.dart';
@@ -8,10 +11,7 @@ import '../utils/logger.dart';
 class TranslationQuizScreen extends StatefulWidget {
   final String category;
 
-  const TranslationQuizScreen({
-    super.key,
-    required this.category,
-  });
+  const TranslationQuizScreen({super.key, required this.category});
 
   @override
   State<TranslationQuizScreen> createState() => _TranslationQuizScreenState();
@@ -19,7 +19,7 @@ class TranslationQuizScreen extends StatefulWidget {
 
 class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
   List<Word> _words = [];
-  List<TranslationQuestion> _questions = [];
+  final List<TranslationQuestion> _questions = [];
   int _currentQuestionIndex = 0;
   int _correctAnswers = 0;
   bool _isLoading = true;
@@ -43,12 +43,15 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
       });
 
       // kategori kelimelerini yükle
-      List<Word> categoryWords = await WordLoader.loadCategoryWords(widget.category);
-      
+      List<Word> categoryWords = await WordLoader.loadCategoryWords(
+        widget.category,
+      );
+
       if (categoryWords.length < 10) {
         setState(() {
           _hasError = true;
-          _errorMessage = 'Bu kategoride yeterli kelime yok. En az 10 kelime gerekli.';
+          _errorMessage =
+              'Bu kategoride yeterli kelime yok. En az 10 kelime gerekli.';
           _isLoading = false;
         });
         return;
@@ -65,7 +68,9 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
         _isLoading = false;
       });
 
-      Logger.i('Çeviri Quiz başlatıldı: ${_words.length} soru, kategori: ${widget.category}');
+      Logger.i(
+        'Çeviri Quiz başlatıldı: ${_words.length} soru, kategori: ${widget.category}',
+      );
     } catch (e) {
       Logger.e('Çeviri Quiz yükleme hatası: $e');
       setState(() {
@@ -79,19 +84,20 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
   void _generateQuestions() {
     _questions.clear();
     final random = Random();
-    
+
     for (int i = 0; i < _words.length; i++) {
       Word currentWord = _words[i];
-      
+
       // %50 şansla doğru veya yanlış çeviri göster
       bool isCorrectTranslation = random.nextBool();
       String displayedMeaning;
-      
+
       if (isCorrectTranslation) {
         displayedMeaning = currentWord.meaning;
       } else {
         // yanlış anlam için diğer kelimelerden rastgele bir tane seç
-        List<Word> otherWords = _words.where((w) => w.word != currentWord.word).toList();
+        List<Word> otherWords =
+            _words.where((w) => w.word != currentWord.word).toList();
         if (otherWords.isNotEmpty) {
           otherWords.shuffle();
           displayedMeaning = otherWords.first.meaning;
@@ -101,25 +107,28 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
           isCorrectTranslation = true;
         }
       }
-      
-      _questions.add(TranslationQuestion(
-        word: currentWord.word,
-        displayedMeaning: displayedMeaning,
-        isCorrect: isCorrectTranslation,
-      ));
+
+      _questions.add(
+        TranslationQuestion(
+          word: currentWord.word,
+          displayedMeaning: displayedMeaning,
+          isCorrect: isCorrectTranslation,
+        ),
+      );
     }
   }
 
   void _selectAnswer(bool answer) {
     if (_isAnswered) return;
-    
+
     setState(() {
       _selectedAnswer = answer;
       _isAnswered = true;
       _showResult = true;
-      
+
       // doğru cevap kontrolü
-      bool isCorrectAnswer = answer == _questions[_currentQuestionIndex].isCorrect;
+      bool isCorrectAnswer =
+          answer == _questions[_currentQuestionIndex].isCorrect;
       if (isCorrectAnswer) {
         _correctAnswers++;
       }
@@ -141,31 +150,46 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
 
   void _finishQuiz() async {
     // quiz tamamlandı, sonuç ekranına git
-    int earnedXp = SessionService.calculateQuizXp('translation', _correctAnswers);
-    
+    int earnedXp = SessionService.calculateQuizXp(
+      'translation',
+      _correctAnswers,
+    );
+
     // XP'yi ekle
     await SessionService().addQuizXp('translation', _correctAnswers);
-    
-    Logger.i('Translation Quiz completed: $_correctAnswers/${_questions.length} correct, +$earnedXp XP', 'TranslationQuiz');
-    
+
+    Logger.i(
+      'Translation Quiz completed: $_correctAnswers/${_questions.length} correct, +$earnedXp XP',
+      'TranslationQuiz',
+    );
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => TranslationQuizResultScreen(
-            correctAnswers: _correctAnswers,
-            totalQuestions: _questions.length,
-            earnedXp: earnedXp,
-            category: widget.category,
-          ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
+        FeatureFlags.useSharedAxisVerticalForModals
+            ? sharedAxisRoute(
+                builder:
+                    (context) => TranslationQuizResultScreen(
+                      correctAnswers: _correctAnswers,
+                      totalQuestions: _questions.length,
+                      earnedXp: earnedXp,
+                      category: widget.category,
+                    ),
+                type: SharedAxisTransitionType.vertical,
+                duration: const Duration(milliseconds: 220),
+                reverseDuration: const Duration(milliseconds: 180),
+              )
+            : fadeThroughRoute(
+                builder:
+                    (context) => TranslationQuizResultScreen(
+                      correctAnswers: _correctAnswers,
+                      totalQuestions: _questions.length,
+                      earnedXp: earnedXp,
+                      category: widget.category,
+                    ),
+                duration: const Duration(milliseconds: 220),
+                reverseDuration: const Duration(milliseconds: 180),
+              ),
       );
     }
   }
@@ -185,9 +209,7 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
           color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      body: SafeArea(
-        child: _buildBody(),
-      ),
+      body: SafeArea(child: _buildBody()),
     );
   }
 
@@ -262,7 +284,9 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
               Text(
                 'Soru ${_currentQuestionIndex + 1}/${_questions.length}',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
                 ),
               ),
               Text(
@@ -279,7 +303,8 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
           // ilerleme çubuğu
           LinearProgressIndicator(
             value: progress,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
             valueColor: AlwaysStoppedAnimation<Color>(
               Theme.of(context).colorScheme.primary,
             ),
@@ -307,15 +332,22 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                
+
                 // kelime
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.3),
                     ),
                   ),
                   child: Text(
@@ -327,26 +359,33 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
                     textAlign: TextAlign.center,
                   ),
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // çeviri ok
                 Icon(
                   Icons.arrow_downward,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.5),
                   size: 32,
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // gösterilen anlam
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withOpacity(0.3),
                     ),
                   ),
                   child: Text(
@@ -360,7 +399,7 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
               ],
             ),
           ),
-          
+
           const SizedBox(height: 32),
 
           // cevap butonları
@@ -401,8 +440,8 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
                 ),
               ),
               child: Text(
-                _currentQuestionIndex < _questions.length - 1 
-                    ? 'Sonraki Soru' 
+                _currentQuestionIndex < _questions.length - 1
+                    ? 'Sonraki Soru'
                     : 'Sonuçları Gör',
                 style: const TextStyle(
                   fontSize: 16,
@@ -422,12 +461,13 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
     required Color color,
   }) {
     bool isSelected = _selectedAnswer == answer;
-    bool isCorrectAnswer = answer == _questions[_currentQuestionIndex].isCorrect;
-    
+    bool isCorrectAnswer =
+        answer == _questions[_currentQuestionIndex].isCorrect;
+
     Color buttonColor;
     Color textColor;
     IconData? feedbackIcon;
-    
+
     if (!_showResult) {
       // henüz cevap verilmemiş
       buttonColor = Theme.of(context).colorScheme.surfaceContainerHighest;
@@ -459,9 +499,10 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
         color: buttonColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isSelected 
-              ? (isCorrectAnswer ? Colors.green : Colors.red)
-              : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          color:
+              isSelected
+                  ? (isCorrectAnswer ? Colors.green : Colors.red)
+                  : Theme.of(context).colorScheme.outline.withOpacity(0.2),
           width: isSelected ? 2 : 1,
         ),
       ),
@@ -473,11 +514,7 @@ class _TranslationQuizScreenState extends State<TranslationQuizScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                feedbackIcon ?? icon,
-                color: textColor,
-                size: 24,
-              ),
+              Icon(feedbackIcon ?? icon, color: textColor, size: 24),
               const SizedBox(width: 8),
               Text(
                 text,
@@ -526,7 +563,7 @@ class TranslationQuizResultScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percentage = (correctAnswers / totalQuestions * 100).round();
-    
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -567,7 +604,9 @@ class TranslationQuizResultScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     Text(
                       _getPerformanceText(percentage),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineSmall?.copyWith(
                         color: _getPerformanceColor(percentage),
                         fontWeight: FontWeight.bold,
                       ),
@@ -577,13 +616,15 @@ class TranslationQuizResultScreen extends StatelessWidget {
                     Text(
                       '%$percentage Başarı',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.7),
                       ),
                     ),
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 24),
 
               // istatistikler
@@ -594,9 +635,9 @@ class TranslationQuizResultScreen extends StatelessWidget {
                 Icons.check_circle,
                 Colors.green,
               ),
-              
+
               const SizedBox(height: 12),
-              
+
               _buildResultCard(
                 context,
                 'Kazanılan XP',
@@ -604,9 +645,9 @@ class TranslationQuizResultScreen extends StatelessWidget {
                 Icons.star,
                 Colors.amber,
               ),
-              
+
               const SizedBox(height: 12),
-              
+
               _buildResultCard(
                 context,
                 'Kategori',
@@ -623,7 +664,9 @@ class TranslationQuizResultScreen extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
-                        Navigator.of(context).popUntil((route) => route.isFirst);
+                        Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst);
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -647,15 +690,16 @@ class TranslationQuizResultScreen extends StatelessWidget {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => TranslationQuizScreen(
-                              category: category,
-                            ),
+                            builder:
+                                (context) =>
+                                    TranslationQuizScreen(category: category),
                           ),
                         );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -703,11 +747,7 @@ class TranslationQuizResultScreen extends StatelessWidget {
               color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 24,
-            ),
+            child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -717,7 +757,9 @@ class TranslationQuizResultScreen extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
                   ),
                 ),
                 Text(

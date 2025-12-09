@@ -6,11 +6,8 @@ import '../models/word_model.dart';
 import '../services/word_service.dart';
 import '../services/user_service.dart';
 import '../services/session_service.dart';
-import '../services/srs_service.dart';
 import '../services/analytics_service.dart';
 import '../services/remote_config_service.dart';
-import '../services/leaderboard_service.dart';
-import '../services/weekly_xp_service.dart';
 import '../utils/feature_flags.dart';
 import '../utils/logger.dart';
 import 'quiz_results_screen.dart';
@@ -275,22 +272,21 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Future<void> _markLearnedWords() async {
-    if (kDebugMode)
-      print(
+    if (kDebugMode) {
         '[QUIZ_DEBUG] entering _markLearnedWords, results=${_quizResults.length}',
       );
+    }
     final learnedWordsService = locator<LearnedWordsService>();
     final session = locator<SessionService>();
     final userId = session.currentUser?.uid;
 
     if (userId == null) {
-      if (kDebugMode)
-        print('[QUIZ_DEBUG] Skipped learned marking — user not logged in.');
+      if (kDebugMode) {
+      }
       return;
     }
 
     if (_quizResults.isEmpty) {
-      if (kDebugMode) print('[QUIZ_DEBUG] No results to mark.');
       return;
     }
 
@@ -335,7 +331,6 @@ class _QuizScreenState extends State<QuizScreen> {
     }
 
     if (kDebugMode) {
-      print(
         '[QUIZ_DEBUG] Marked $added learned words (category: ${widget.categoryKey ?? "unknown"})',
       );
     }
@@ -354,17 +349,59 @@ class _QuizScreenState extends State<QuizScreen> {
       _showPreparingResultsDialog();
       dialogOpen = true;
 
-      await _markLearnedWords();
-
+      final sessionService = locator<SessionService>();
+      final uid = sessionService.currentUser?.uid;
       final earnedXp = _score * 10;
 
-      await Future.delayed(const Duration(seconds: 3));
+      // Tüm işlemleri paralel olarak başlat
+      final futures = <Future>[];
+      
+      // 1. Öğrenilen kelimeleri kaydet
+      futures.add(_markLearnedWords());
+      
+      // 2. Aktivite kaydını yap (haftalık grafik için)
+      if (uid != null) {
+        futures.add(
+          _statistics.recordActivity(
+            userId: uid,
+            xpEarned: earnedXp,
+            learnedWordsCount: _score,
+            quizzesCompleted: 1,
+          ).then((_) {
+          }).catchError((e) {
+          }),
+        );
+        
+        // 3. XP ve quiz sayısını güncelle
+        futures.add(
+          sessionService.addXp(earnedXp, quizzesCompleted: 1).then((_) {
+          }).catchError((e) {
+          }),
+        );
+        
+        // Quiz completion is now tracked via session service
+      } else {
+      }
+      
+      // Minimum 500ms bekle (kullanıcı deneyimi için - dialog'u görmek için)
+      // 2000ms -> 500ms düşürüldü
+      futures.add(Future.delayed(const Duration(milliseconds: 500)));
+
+      // Tüm işlemlerin tamamlanmasını bekle
+      await Future.wait(futures);
 
       if (mounted) {
         if (dialogOpen) {
           Navigator.of(context, rootNavigator: true).pop();
           dialogOpen = false;
         }
+        
+        // XP popup'ını göster
+        if (uid != null) {
+          showXPPopup(context, earnedXp);
+        }
+        
+        // Sonuç ekranına geç
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder:
@@ -396,29 +433,7 @@ class _QuizScreenState extends State<QuizScreen> {
           ),
         );
       }
-
-      final sessionService = locator<SessionService>();
-      final uid = sessionService.currentUser?.uid;
-
-      if (uid != null) {
-        try {
-          await sessionService.addXp(earnedXp);
-          await WeeklyXpService.addQuizCompletion(uid);
-          if (mounted) {
-            showXPPopup(context, earnedXp);
-          }
-          debugPrint(
-            '[XP] +$earnedXp → totalXp with weekly tracking (uid=$uid)',
-          );
-          debugPrint(
-            '[QUIZ] +1 → totalQuizzesCompleted with weekly tracking (uid=$uid)',
-          );
-        } catch (e) {
-          debugPrint('Error updating XP and quiz stats: $e');
-        }
-      }
     } catch (e) {
-      debugPrint('Error in quiz completion: $e');
       if (mounted && dialogOpen) {
         Navigator.of(context, rootNavigator: true).pop();
         dialogOpen = false;
@@ -446,21 +461,98 @@ class _QuizScreenState extends State<QuizScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF111518),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            CircularProgressIndicator(color: Color(0xFF33C4B3)),
-            SizedBox(width: 16),
-            Flexible(
-              child: Text(
-                'Quiz sonuçları hesaplanıyor...',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
+      barrierColor: Colors.black87,
+      builder: (_) => WillPopScope(
+        onWillPop: () async => false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            padding: const EdgeInsets.all(24.0),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1F2E),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
-          ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                SizedBox(
+                  width: 70,
+                  height: 70,
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF33C4B3),
+                    strokeWidth: 5,
+                  ),
+                ),
+                SizedBox(height: 28),
+                Text(
+                  '✨ Sonuçlarınız Hazırlanıyor',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Lütfen bekleyin...',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      color: Color(0xFF33C4B3),
+                      size: 18,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Kelimeler kaydediliyor',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.bar_chart_rounded,
+                      color: Color(0xFF33C4B3),
+                      size: 18,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'İstatistikler güncelleniyor',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -540,6 +632,8 @@ class _QuizScreenState extends State<QuizScreen> {
           foregroundColor: theme.colorScheme.onSurface,
         ),
         body: Container(
+          width: double.infinity,
+          height: double.infinity,
           color: theme.colorScheme.surface,
           child: Center(
             child: Column(
@@ -570,6 +664,8 @@ class _QuizScreenState extends State<QuizScreen> {
           foregroundColor: theme.colorScheme.onSurface,
         ),
         body: Container(
+          width: double.infinity,
+          height: double.infinity,
           color: theme.colorScheme.surface,
           child: Center(
             child: Column(
@@ -614,6 +710,8 @@ class _QuizScreenState extends State<QuizScreen> {
           foregroundColor: theme.colorScheme.onSurface,
         ),
         body: Container(
+          width: double.infinity,
+          height: double.infinity,
           color: theme.colorScheme.surface,
           child: Center(
             child: Column(
@@ -698,6 +796,8 @@ class _QuizScreenState extends State<QuizScreen> {
         ],
       ),
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         color: theme.colorScheme.surface,
         child: Stack(
           children: [

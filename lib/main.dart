@@ -4,7 +4,6 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -13,11 +12,12 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'firebase_options.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'models/word_model.dart';
 import 'models/user_data.dart';
 import 'models/daily_log.dart';
 import 'models/user_stats_model.dart';
+import 'models/sync_operation.dart';
 import 'services/cloud_sync_service.dart';
 import 'services/word_service.dart';
 import 'services/user_service.dart';
@@ -27,15 +27,18 @@ import 'services/ad_service.dart';
 import 'services/notification_service.dart';
 import 'services/learned_words_service.dart';
 import 'services/achievement_service.dart';
+import 'services/sync_queue_service.dart';
+import 'services/background_sync_manager.dart';
 import 'providers/theme_provider.dart';
 import 'providers/profile_stats_provider.dart';
 import 'providers/cards_provider.dart';
 import 'providers/sync_status_provider.dart';
 import 'utils/hive_boxes.dart';
 import 'themes/lexiflow_theme.dart';
-import 'utils/lexiflow_colors.dart';
+import 'utils/design_system.dart';
 import 'widgets/auth_wrapper.dart';
 import 'widgets/mobile_only_guard.dart';
+import 'widgets/immersive_wrapper.dart';
 import 'screens/splash_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/favorites_screen.dart';
@@ -50,100 +53,50 @@ import 'screens/quiz_center_screen.dart';
 import 'screens/category_quiz_play_screen.dart';
 import 'screens/general_quiz_screen.dart';
 import 'screens/quiz_start_screen.dart';
+import 'screens/sign_in_screen.dart';
 import 'utils/logger.dart';
 import 'widgets/connection_status_widget.dart';
 import 'widgets/sync_notification_widget.dart';
 import 'di/locator.dart';
 import 'debug/connectivity_debug.dart';
-
-/*
-  Startup Freeze Fix - Root Cause and Solution
-  ------------------------------------------------
-  Root Cause:
-  After a refactor, runApp(MyApp) was invoked before critical platform
-  services were initialized. Some widgets/services (FirebaseAuth, Analytics,
-  Hive boxes, DI locator) accessed Firebase/Hive immediately, which led to
-  NotInitialized errors and a white/pink screen during startup.
-
-  What we changed:
-  1) Perform critical initialization BEFORE runApp:
-     - WidgetsFlutterBinding.ensureInitialized()
-     - Firebase.initializeApp(...)
-     - Hive.initFlutter + register adapters + open required box(es)
-     - setupLocator() for DI
-     - Initialize critical domain services (WordService, UserService, SessionService)
-  2) Defer non‑critical services to background using unawaited()/microtasks
-     AFTER runApp so first UI paints immediately.
-  3) Strengthened AuthWrapper to always render a minimal scaffold and present
-     a visible error UI if something goes wrong, instead of propagating raw
-     initialization errors.
-
-  Result:
-  The app now boots cleanly without NotInitializedError, and the first frame
-  appears quickly. This sequence is safe in both debug and release builds.
-*/
+import 'utils/feature_flags.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Load environment variables FIRST
-  try {
-    await dotenv.load(fileName: ".env");
-    debugPrint('✅ [main] .env loaded');
-  } catch (e) {
-    debugPrint('⚠️ [main] .env load failed (continuing with defaults): $e');
-  }
 
-  // Critical initialization BEFORE runApp to avoid NotInitializedError
   try {
-    debugPrint('[boot] Phase-A start');
-    debugPrint('🔧 [main] Initializing Firebase core...');
+
     // Detect existing default app created by native provider and reuse it.
     // If none exists, initialize with explicit options.
     try {
       final existingApp = Firebase.app();
-      debugPrint('⚠️ [main] Existing Firebase app detected: ${existingApp.name}; using it');
+      // Existing Firebase app detected, using it
     } on FirebaseException catch (_) {
       try {
-        // Prefer explicit options loaded from .env; if missing, fall back
-        // to native resources (google-services.json).
-        FirebaseOptions? opts;
-        try {
-          final candidate = DefaultFirebaseOptions.currentPlatform;
-          if (candidate.apiKey.isNotEmpty &&
-              candidate.appId.isNotEmpty &&
-              candidate.projectId.isNotEmpty) {
-            opts = candidate;
-          } else {
-            debugPrint('⚠️ [main] Incomplete FirebaseOptions from .env; using native defaults');
-          }
-        } catch (_) {
-          // Unsupported platform or other issues; use native defaults
-        }
+        await Firebase.initializeApp();
 
-        if (opts != null) {
-          await Firebase.initializeApp(options: opts);
-        } else {
-          await Firebase.initializeApp();
-        }
-        debugPrint('✅ [main] Firebase core initialized');
       } on FirebaseException catch (e) {
         // If native auto-init already created the default app, re-initialization throws.
         final msg = e.message ?? '';
         if (e.code == 'duplicate-app' || msg.contains('already exists')) {
-          debugPrint('⚠️ [main] Default app already exists; proceeding without re-init');
+          // Default app already exists; proceeding without re-init
         } else {
           rethrow;
         }
       }
     }
-    
+
     // Register background message handler AFTER Firebase is initialized
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    debugPrint('✅ [main] Background message handler registered');
 
-    // System UI configuration (non-blocking)
-    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    // System UI configuration - Fully immersive fullscreen
+    // immersiveSticky: Hides both status and navigation bars, shows temporarily on swipe
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+      overlays: [], // Empty list = hide all system overlays
+    );
+    
+    // Set transparent colors for when bars appear temporarily
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -156,13 +109,9 @@ Future<void> main() async {
       ),
     );
 
-    debugPrint('📦 [main] Initializing local services (Hive)...');
     await _initializeLocalServices();
-    debugPrint('✅ [main] Hive initialized');
 
-    debugPrint('🧩 [main] Setting up service locator...');
     await setupLocator();
-    debugPrint('✅ [main] Service locator ready');
 
     // Safety check: ensure critical services are registered before building the widget tree
     assert(
@@ -174,18 +123,16 @@ Future<void> main() async {
       'ThemeProvider not registered before runApp! Ensure setupLocator() registers it.',
     );
     assert(
-      locator.isRegistered<WordService>() && locator.isRegistered<UserService>(),
+      locator.isRegistered<WordService>() &&
+          locator.isRegistered<UserService>(),
       'Core services (WordService/UserService) not registered before runApp!',
     );
 
-    debugPrint('🚀 [main] Initializing critical domain services...');
     await _initializeCriticalServices();
-    debugPrint('✅ [main] Critical services initialized');
-    debugPrint('[boot] Phase-A end ✅');
-    debugPrint('[main] runApp(BootApp)');
+
     runApp(const BootApp());
   } catch (e, st) {
-    debugPrint('❌ [main] Critical initialization failed: $e\n$st');
+
     runApp(const _MinimalErrorApp());
   }
 }
@@ -198,27 +145,53 @@ class BootApp extends StatefulWidget {
   State<BootApp> createState() => _BootAppState();
 }
 
-class _BootAppState extends State<BootApp> {
+class _BootAppState extends State<BootApp> with WidgetsBindingObserver {
   // BootApp kendi MaterialApp'ı içinde gezinmek için yerel navigator key
-  final GlobalKey<NavigatorState> _bootNavigatorKey = GlobalKey<NavigatorState>();
+  final GlobalKey<NavigatorState> _bootNavigatorKey =
+      GlobalKey<NavigatorState>();
+  
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _enforceImmersiveMode();
+    
     // Phase-B: start non-critical initializations in background after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      debugPrint('[boot] Phase-B start');
+
       // No Firebase re-initialization here; Phase-A already did it.
+      unawaited(_initializeNonCriticalServices());
       unawaited(_initializeFirebaseServices());
       unawaited(_initializeFirebaseMessaging());
-      unawaited(_initializeNonCriticalServices());
 
       // Navigate to the fully initialized app after the first frame
       if (!mounted) return;
       _bootNavigatorKey.currentState?.pushReplacement(
         MaterialPageRoute(builder: (_) => const InitializedApp()),
       );
-      debugPrint('[boot] Phase-B end');
+
     });
+  }
+  
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Re-enforce immersive mode when app comes back to foreground
+      _enforceImmersiveMode();
+    }
+  }
+  
+  void _enforceImmersiveMode() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+      overlays: [],
+    );
   }
 
   @override
@@ -253,7 +226,7 @@ class _BootAppState extends State<BootApp> {
 }
 
 class _MinimalErrorApp extends StatelessWidget {
-  const _MinimalErrorApp({super.key});
+  const _MinimalErrorApp();
 
   @override
   Widget build(BuildContext context) {
@@ -273,18 +246,16 @@ class _MinimalErrorApp extends StatelessWidget {
 
 Future<void> _initializeFirebaseServices() async {
   // Phase-B services init: no Firebase core re-initialization here
-  debugPrint('🔥 Initializing Firebase services...');
   if (Firebase.apps.isEmpty) {
-    debugPrint('⚠️ Skipping Firebase services init: Firebase not initialized');
+
     return;
   }
 
   // Firebase Crashlytics'i başlat
-  debugPrint('📊 Initializing Firebase Crashlytics...');
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
 
   if (kDebugMode) {
-    debugPrint('🧠 Bellek izleme etkinleştirildi');
+
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
       FirebaseCrashlytics.instance.recordFlutterFatalError(details);
@@ -302,15 +273,12 @@ Future<void> _initializeFirebaseServices() async {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
   };
-  debugPrint('✅ Crashlytics initialized');
 
   // Firebase Analytics'i başlat
-  debugPrint('📊 Initializing Firebase Analytics...');
   FirebaseAnalytics.instance;
-  debugPrint('✅ Analytics initialized');
 
   // Firebase Remote Config'i başlat
-  debugPrint('⚙️ Initializing Firebase Remote Config...');
+
   final remoteConfig = FirebaseRemoteConfig.instance;
   await remoteConfig.setConfigSettings(
     RemoteConfigSettings(
@@ -323,9 +291,9 @@ Future<void> _initializeFirebaseServices() async {
 
   try {
     await remoteConfig.fetchAndActivate();
-    debugPrint('✅ Remote Config initialized and fetched');
+
   } catch (e) {
-    debugPrint('⚠️ Remote Config fetch failed (using defaults): $e');
+
   }
 }
 
@@ -335,7 +303,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Do not re-initialize Firebase here to avoid duplicate-app errors.
   // In background isolate, if Firebase isn't available, skip handling.
   if (Firebase.apps.isEmpty) {
-    debugPrint('⚠️ [bg] Firebase not initialized in background isolate; skipping handler');
+    // Firebase not initialized in background isolate; skipping handler
     return;
   }
 }
@@ -343,18 +311,16 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Future<void> _initializeFirebaseMessaging() async {
   // Phase-B messaging init: Firebase is already initialized in Phase-A
   if (Firebase.apps.isEmpty) {
-    debugPrint('⚠️ Skipping messaging init: Firebase not initialized');
+
     return;
   }
   await NotificationService().init();
   final messaging = FirebaseMessaging.instance;
   try {
     final settings = await messaging.requestPermission();
-    debugPrint(
-      '[FirebaseMessaging] Permission status: ${settings.authorizationStatus}',
-    );
+
   } catch (e) {
-    debugPrint('[FirebaseMessaging] Error requesting permission: $e');
+
   }
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
@@ -378,10 +344,10 @@ Future<void> _initializeFirebaseMessaging() async {
   try {
     final token = await messaging.getToken();
     if (token != null) {
-      debugPrint('[FirebaseMessaging] Token: $token');
+
     }
   } catch (e) {
-    debugPrint('[FirebaseMessaging] Failed to obtain token: $e');
+
   }
 
   try {
@@ -390,7 +356,7 @@ Future<void> _initializeFirebaseMessaging() async {
       NotificationService().handleMessageNavigation(initialMessage.data);
     }
   } catch (e) {
-    debugPrint('[FirebaseMessaging] Failed to fetch initial message: $e');
+
   }
 }
 
@@ -440,81 +406,89 @@ String _getCategoryIcon(String categoryKey) {
 
 Future<void> _initializeLocalServices() async {
   // intl paketi için yerel veri formatlarını başlat
-  debugPrint('🌍 Initializing locale data...');
+
   await initializeDateFormatting('tr_TR', null);
-  debugPrint('✅ Locale data initialized');
 
   // Hive'ı başlat
-  debugPrint('📦 Initializing Hive...');
+
   await Hive.initFlutter();
-  debugPrint('📦 Registering Hive adapters...');
+
   Hive.registerAdapter(WordAdapter());
   Hive.registerAdapter(DailyLogAdapter());
   Hive.registerAdapter(UserDataAdapter());
   Hive.registerAdapter(CachedUserDataAdapter());
+  
+  // Register Silent Sync adapter
+  Hive.registerAdapter(SyncOperationAdapter());
+
   await ensureFlashcardsCacheBox();
-  debugPrint('✅ Hive initialized');
+
+  // Initialize Silent Sync services
+
+  await SyncQueueService().init();
+  await BackgroundSyncManager().init();
+
+  // Trigger background sync (fire and forget - non-blocking)
+  unawaited(BackgroundSyncManager().syncOnAppStart());
+
 }
 
 Future<void> _initializeCriticalServices() async {
   // Kritik servisler artık DI locator tarafından yönetiliyor
-  debugPrint('🔧 Initializing critical services via DI...');
 
   final wordService = locator<WordService>();
   await wordService.init();
-  debugPrint('✅ WordService initialized');
 
   final userService = locator<UserService>();
   await userService.init();
-  debugPrint('✅ UserService initialized');
 
   final sessionService = locator<SessionService>();
   sessionService.setUserService(userService);
   await sessionService.initialize();
-  debugPrint('✅ SessionService initialized');
 
-  debugPrint('✅ All critical services initialized');
 }
 
 Future<void> _initializeNonCriticalServices() async {
   try {
     if (!locator.isRegistered<UserService>()) {
-      debugPrint('⚠️ Skipping NonCritical init: UserService not registered');
+
       return;
     }
     final userService = locator<UserService>();
     userService.updateStreak();
 
     // AdMob'u başlat (opsiyonel, kritik değil)
-    try {
-      debugPrint('📱 Initializing AdMob in background...');
-      await AdService.initialize();
-      debugPrint('✅ AdMob initialized');
-    } catch (e) {
-      debugPrint('⚠️ AdMob initialization failed (non-critical): $e');
+    if (FeatureFlags.adsEnabled) {
+      try {
+        await MobileAds.instance.updateRequestConfiguration(
+          RequestConfiguration(),
+        );
+
+        await AdService.initialize();
+
+        // Preload a rewarded ad to reduce latency on first gate (silent)
+        final adService = locator<AdService>();
+        try {
+          await adService.loadRewardedAd();
+        } catch (_) {}
+      } catch (_) {}
     }
 
     // Bildirim planlarını uygula (init dahili olarak çağrılır)
-    debugPrint('🔔 Applying notification schedules from preferences...');
+
     final notificationService = NotificationService();
     final currentUserId = locator<SessionService>().currentUser?.uid;
     await notificationService.applySchedulesFromPrefs(userId: currentUserId);
-    debugPrint('✅ Notification schedules applied');
 
     // LearnedWordsService'i başlat
-    debugPrint('📚 Initializing LearnedWordsService in background...');
+
     final learnedWordsService = LearnedWordsService();
     await learnedWordsService.initialize();
-    debugPrint('✅ LearnedWordsService initialized');
 
     // SessionService handles its own non-critical initialization (LeaderboardService, real-time listeners)
-    debugPrint('ℹ️ SessionService non-critical services handled internally');
 
-    debugPrint(
-      '🎉 All main.dart non-critical services initialized successfully',
-    );
   } catch (e) {
-    debugPrint('⚠️ Error initializing non-critical services: $e');
+
   }
 }
 
@@ -525,7 +499,7 @@ class InitializedApp extends StatefulWidget {
   State<InitializedApp> createState() => _InitializedAppState();
 }
 
-class _InitializedAppState extends State<InitializedApp> {
+class _InitializedAppState extends State<InitializedApp> with WidgetsBindingObserver {
   late final ThemeProvider _themeProvider;
   late final SessionService _sessionService;
   late final WordService _wordService;
@@ -536,9 +510,12 @@ class _InitializedAppState extends State<InitializedApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _enforceImmersiveMode();
+    
     // Resolve DI dependencies in initState to avoid locator access during build
     if (!locator.isRegistered<ThemeProvider>()) {
-      debugPrint('❌ [init] ThemeProvider not registered; showing error UI');
+      // ThemeProvider not registered; showing error UI
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
@@ -554,10 +531,31 @@ class _InitializedAppState extends State<InitializedApp> {
     _migrationIntegrationService = locator<MigrationIntegrationService>();
     _adService = locator<AdService>();
   }
+  
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Re-enforce immersive mode when app comes back to foreground
+      _enforceImmersiveMode();
+    }
+  }
+  
+  void _enforceImmersiveMode() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+      overlays: [],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('🧩 InitializedApp build()');
+
     // App is considered initialized because main() performed
     // critical initialization before runApp.
     return _buildInitializedApp();
@@ -615,8 +613,7 @@ class _InitializedAppState extends State<InitializedApp> {
                   child: AuthWrapper(
                     wordService: _wordService,
                     userService: _userService,
-                    migrationIntegrationService:
-                        _migrationIntegrationService,
+                    migrationIntegrationService: _migrationIntegrationService,
                     adService: _adService,
                   ),
                 ),
@@ -658,6 +655,7 @@ class _InitializedAppState extends State<InitializedApp> {
                     );
                   },
                   '/profile': (context) => const ProfileScreen(),
+                  '/login': (context) => const SignInScreen(),
                   '/privacy-policy': (context) => const PrivacyPolicyScreen(),
                   '/terms-of-service':
                       (context) => const TermsOfServiceScreen(),
@@ -710,16 +708,11 @@ class _InitializedAppState extends State<InitializedApp> {
                 },
                 builder: (context, child) {
                   final content = child ?? const SizedBox.shrink();
-                  // Wrap the app content with ConnectionStatusWidget which manages
-                  // connection notifications and persistent offline indicator.
-                  // Place SyncNotificationWidget inside the base Stack so it can
-                  // position its overlays at the top.
-                  return ConnectionStatusWidget(
-                    child: Stack(
-                      children: [
-                        content,
-                        const SyncNotificationWidget(),
-                      ],
+                  // Wrap with ImmersiveWrapper to enforce fullscreen and remove padding
+                  // Then wrap with ConnectionStatusWidget for network status
+                  return ImmersiveWrapper(
+                    child: ConnectionStatusWidget(
+                      child: content,
                     ),
                   );
                 },
@@ -747,7 +740,6 @@ class AppInitializationController extends ChangeNotifier {
       return;
     }
     _isInitializing = true;
-    debugPrint('[AppInit] initialization started');
 
     try {
       // Yield to the scheduler so the first frame can render before heavy work.
@@ -768,16 +760,16 @@ class AppInitializationController extends ChangeNotifier {
       _stackTrace = null;
       _isReady = true;
       notifyListeners();
-      debugPrint('[AppInit] Core initialization complete');
 
       // Non-critical tasks are already handled in BootApp Phase-B.
     } catch (e, stack) {
       _error = e;
       _stackTrace = stack;
-      debugPrint('[AppInit] Initialization error: $e');
+
       notifyListeners();
     } finally {
       _isInitializing = false;
     }
   }
 }
+

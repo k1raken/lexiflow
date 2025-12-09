@@ -5,28 +5,25 @@ void showXPPopup(BuildContext context, int amount) {
   if (amount <= 0) return;
 
   final overlay = Overlay.of(context);
-  if (overlay == null) return;
 
   late OverlayEntry entry;
   entry = OverlayEntry(
-    builder: (_) => _XPPopupOverlay(
-      amount: amount,
-      onCompleted: () {
-        if (entry.mounted) {
-          entry.remove();
-        }
-      },
-    ),
+    builder:
+        (_) => _XPPopupOverlay(
+          amount: amount,
+          onCompleted: () {
+            if (entry.mounted) {
+              entry.remove();
+            }
+          },
+        ),
   );
 
   overlay.insert(entry);
 }
 
 class _XPPopupOverlay extends StatefulWidget {
-  const _XPPopupOverlay({
-    required this.amount,
-    required this.onCompleted,
-  });
+  const _XPPopupOverlay({required this.amount, required this.onCompleted});
 
   final int amount;
   final VoidCallback onCompleted;
@@ -52,12 +49,7 @@ class _XPPopupOverlayState extends State<_XPPopupOverlay>
   late final Animation<double> _scaleAnimation = Tween<double>(
     begin: 0.85,
     end: 1.0,
-  ).animate(
-    CurvedAnimation(
-      parent: _controller,
-      curve: Curves.elasticOut,
-    ),
-  );
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
 
   late final Animation<Offset> _slideAnimation = Tween<Offset>(
     begin: const Offset(0, 0.1),
@@ -94,8 +86,8 @@ class _XPPopupOverlayState extends State<_XPPopupOverlay>
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Positioned.fill(
+    return Positioned.fill(
+      child: IgnorePointer(
         child: SafeArea(
           child: AnimatedBuilder(
             animation: _controller,
@@ -104,10 +96,7 @@ class _XPPopupOverlayState extends State<_XPPopupOverlay>
                 position: _slideAnimation,
                 child: FadeTransition(
                   opacity: _opacityAnimation,
-                  child: ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: child,
-                  ),
+                  child: ScaleTransition(scale: _scaleAnimation, child: child),
                 ),
               );
             },

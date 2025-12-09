@@ -169,7 +169,6 @@ class CategoryProgressService {
       final age = DateTime.now().difference(learnedTs);
       if (age < _learnedCacheTTL) {
         if (kDebugMode) {
-          print('[CategoryProgressCache] hit for learned:$normalized');
         }
         return learnedCached;
       }
@@ -196,7 +195,6 @@ class CategoryProgressService {
         final cached = _totalCountCache[normalized];
         if (cached != null) {
           if (kDebugMode) {
-            print('[CategoryProgressCache] hit for total:$normalized');
           }
           return cached;
         }
@@ -254,7 +252,6 @@ class CategoryProgressService {
           // yalnızca değer değiştiğinde log bas
           if (rounded != _lastLoggedPercent[normalized]) {
             if (kDebugMode) {
-              print(
                 '[CategoryProgressStream] $normalized: learned=$learnedCount / total=$total -> ${rounded.toStringAsFixed(1)}%',
               );
             }
@@ -296,7 +293,6 @@ class CategoryProgressService {
     _totalCountCacheTimestamps.remove(key);
     _lastLoggedPercent.remove(key);
     if (kDebugMode) {
-      print('[CategoryProgressCache] invalidated for $key');
     }
   }
 }

@@ -38,516 +38,619 @@
   {
     "word": "make",
     "meaning": "to create or produce something",
+    "tr": "yapmak, üretmek",
     "exampleSentence": "She likes to make her own clothes."
   },
   {
     "word": "know",
     "meaning": "to have information in your mind",
+    "tr": "bilmek, tanımak",
     "exampleSentence": "Do you know the way to the station?"
   },
   {
     "word": "think",
     "meaning": "to have a particular opinion or idea",
+    "tr": "düşünmek",
     "exampleSentence": "I think this is a great idea."
   },
   {
     "word": "take",
     "meaning": "to move or carry something from one place to another",
+    "tr": "almak, götürmek",
     "exampleSentence": "Don't forget to take your umbrella."
   },
   {
     "word": "see",
     "meaning": "to notice or become aware of someone or something by using your eyes",
+    "tr": "görmek",
     "exampleSentence": "Did you see the beautiful sunset yesterday?"
   },
   {
     "word": "come",
     "meaning": "to move or travel towards the speaker or a particular place",
+    "tr": "gelmek",
     "exampleSentence": "Can you come to my party on Friday?"
   },
   {
     "word": "want",
     "meaning": "to desire a particular thing or to desire to do something",
+    "tr": "istemek",
     "exampleSentence": "I want a cup of tea, please."
   },
   {
     "word": "look",
     "meaning": "to direct your eyes in a particular direction",
+    "tr": "bakmak",
     "exampleSentence": "Look at that amazing bird in the sky!"
   },
   {
     "word": "use",
     "meaning": "to do something with a machine, tool, or object for a particular purpose",
+    "tr": "kullanmak",
     "exampleSentence": "You can use my pen if you need one."
   },
   {
     "word": "find",
     "meaning": "to discover something or someone unexpectedly",
+    "tr": "bulmak",
     "exampleSentence": "I can't find my keys anywhere."
   },
   {
     "word": "give",
     "meaning": "to offer something to someone",
+    "tr": "vermek",
     "exampleSentence": "Could you give me that book?"
   },
   {
     "word": "tell",
     "meaning": "to say something to someone, usually giving them information",
+    "tr": "söylemek, anlatmak",
     "exampleSentence": "Can you tell me a story?"
   },
   {
     "word": "work",
     "meaning": "to do a job, especially the job you do to earn money",
+    "tr": "çalışmak",
     "exampleSentence": "I have to work from 9 to 5 every day."
   },
   {
     "word": "call",
     "meaning": "to give someone or something a name",
+    "tr": "çağırmak, adlandırmak",
     "exampleSentence": "They decided to call their new dog 'Buddy'."
   },
   {
     "word": "try",
     "meaning": "to attempt to do something",
+    "tr": "denemek",
     "exampleSentence": "You should try this cake, it's delicious."
   },
   {
     "word": "ask",
     "meaning": "to say something in order to get an answer or information",
+    "tr": "sormak, istemek",
     "exampleSentence": "Don't be afraid to ask for help."
   },
   {
     "word": "need",
     "meaning": "to require something because it is essential",
+    "tr": "ihtiyaç duymak",
     "exampleSentence": "Plants need water and sunlight to grow."
   },
   {
     "word": "feel",
     "meaning": "to experience an emotion or a physical sensation",
+    "tr": "hissetmek",
     "exampleSentence": "I feel happy when I listen to music."
   },
   {
     "word": "become",
     "meaning": "to begin to be something",
+    "tr": "olmak, haline gelmek",
     "exampleSentence": "A caterpillar will eventually become a butterfly."
   },
   {
     "word": "leave",
     "meaning": "to go away from a place or person",
+    "tr": "ayrılmak, bırakmak",
     "exampleSentence": "We have to leave the house at 8 AM."
   },
   {
     "word": "put",
     "meaning": "to move something into a particular place or position",
+    "tr": "koymak",
     "exampleSentence": "Please put the books back on the shelf."
   },
   {
     "word": "mean",
     "meaning": "to have a particular meaning",
+    "tr": "anlamına gelmek, demek",
     "exampleSentence": "What does this complicated word mean?"
   },
   {
     "word": "keep",
     "meaning": "to continue to have or own something",
+    "tr": "tutmak, korumak",
     "exampleSentence": "You can keep the change."
   },
   {
     "word": "let",
     "meaning": "to allow something to happen or someone to do something",
+    "tr": "izin vermek",
     "exampleSentence": "My parents let me stay up late on weekends."
   },
   {
     "word": "begin",
     "meaning": "to start to do something",
+    "tr": "başlamak",
     "exampleSentence": "The movie will begin in five minutes."
   },
   {
     "word": "seem",
     "meaning": "to give the effect of being or doing something",
+    "tr": "görünmek",
     "exampleSentence": "You seem tired today."
   },
   {
     "word": "help",
     "meaning": "to make it easier for someone to do something",
+    "tr": "yardım etmek",
     "exampleSentence": "Can you help me carry these bags?"
   },
   {
     "word": "talk",
     "meaning": "to say things to someone as part of a conversation",
+    "tr": "konuşmak",
     "exampleSentence": "I need to talk to you about our plans."
   },
   {
     "word": "turn",
     "meaning": "to move in a circular direction",
+    "tr": "dönmek, çevirmek",
     "exampleSentence": "Turn the page to continue reading."
   },
   {
     "word": "start",
     "meaning": "to begin doing something",
+    "tr": "başlamak",
     "exampleSentence": "Let's start the meeting."
   },
   {
     "word": "show",
     "meaning": "to let someone see something",
+    "tr": "göstermek",
     "exampleSentence": "Can you show me your new painting?"
   },
   {
     "word": "hear",
     "meaning": "to receive or become conscious of a sound using your ears",
+    "tr": "duymak",
     "exampleSentence": "I can hear music from the next room."
   },
   {
     "word": "play",
     "meaning": "to spend time doing an enjoyable and amusing activity",
+    "tr": "oynamak",
     "exampleSentence": "The children love to play in the garden."
   },
   {
     "word": "run",
     "meaning": "to move along, faster than walking, by taking quick steps",
+    "tr": "koşmak, işletmek",
     "exampleSentence": "He can run a mile in under five minutes."
   },
   {
     "word": "move",
     "meaning": "to change position",
+    "tr": "hareket etmek, taşımak",
     "exampleSentence": "Please move your car from the driveway."
   },
   {
     "word": "like",
     "meaning": "to enjoy or approve of something or someone",
+    "tr": "sevmek, hoşlanmak",
     "exampleSentence": "I really like chocolate ice cream."
   },
   {
     "word": "live",
     "meaning": "to have your home in a particular place",
+    "tr": "yaşamak",
     "exampleSentence": "They live in a small house by the sea."
   },
   {
     "word": "believe",
     "meaning": "to accept that something is true, without any proof",
+    "tr": "inanmak",
     "exampleSentence": "I believe you can achieve your goals."
   },
   {
     "word": "hold",
     "meaning": "to take and keep something in your hand or arms",
+    "tr": "tutmak",
     "exampleSentence": "Please hold my hand when we cross the street."
   },
   {
     "word": "bring",
     "meaning": "to take someone or something with you when you go somewhere",
+    "tr": "getirmek",
     "exampleSentence": "Don't forget to bring a gift to the party."
   },
   {
     "word": "happen",
     "meaning": "to take place, especially without being planned",
+    "tr": "olmak, meydana gelmek",
     "exampleSentence": "Accidents can happen at any time."
   },
   {
     "word": "write",
     "meaning": "to make marks that represent letters, words, or numbers on a surface",
+    "tr": "yazmak",
     "exampleSentence": "She is learning how to write her name."
   },
   {
     "word": "provide",
     "meaning": "to give something that is needed or wanted to someone",
+    "tr": "sağlamak",
     "exampleSentence": "The hotel will provide towels and soap."
   },
   {
     "word": "sit",
     "meaning": "to be in a position with the weight of your body on your bottom",
+    "tr": "oturmak",
     "exampleSentence": "Let's sit on this bench for a while."
   },
   {
     "word": "stand",
     "meaning": "to be in a vertical state or to put into a vertical state",
+    "tr": "ayakta durmak",
     "exampleSentence": "Please stand up when the judge enters."
   },
   {
     "word": "lose",
     "meaning": "to be unable to find something or someone",
+    "tr": "kaybetmek",
     "exampleSentence": "Be careful not to lose your ticket."
   },
   {
     "word": "pay",
     "meaning": "to give money to someone for something you have bought",
+    "tr": "ödemek",
     "exampleSentence": "I need to pay the electricity bill today."
   },
   {
     "word": "meet",
     "meaning": "to see and talk to someone for the first time",
+    "tr": "buluşmak, tanışmak",
     "exampleSentence": "It was a pleasure to meet you."
   },
   {
     "word": "include",
     "meaning": "to contain something as a part of something else",
+    "tr": "içermek",
     "exampleSentence": "The price will include breakfast."
   },
   {
     "word": "continue",
     "meaning": "to keep happening, existing, or doing something",
+    "tr": "devam etmek",
     "exampleSentence": "Please continue with your story."
   },
   {
     "word": "set",
     "meaning": "to put something in a particular place or position",
+    "tr": "ayarlamak, kurmak",
     "exampleSentence": "She set the table for dinner."
   },
   {
     "word": "learn",
     "meaning": "to get knowledge or skill in a new subject or activity",
+    "tr": "öğrenmek",
     "exampleSentence": "I want to learn how to play the guitar."
   },
   {
     "word": "change",
     "meaning": "to make or become different",
+    "tr": "değişmek, değiştirmek",
     "exampleSentence": "The leaves change color in the autumn."
   },
   {
     "word": "lead",
     "meaning": "to control a group of people, a country, or a situation",
+    "tr": "önderlik etmek, yönlendirmek",
     "exampleSentence": "A good captain will lead the team to victory."
   },
   {
     "word": "understand",
     "meaning": "to know the meaning of something that someone says",
+    "tr": "anlamak",
     "exampleSentence": "I don't understand this math problem."
   },
   {
     "word": "watch",
     "meaning": "to look at something for a period of time",
+    "tr": "izlemek",
     "exampleSentence": "Let's watch a movie tonight."
   },
   {
     "word": "follow",
     "meaning": "to move behind someone or something",
+    "tr": "takip etmek",
     "exampleSentence": "The ducklings follow their mother everywhere."
   },
   {
     "word": "stop",
     "meaning": "to finish doing something",
+    "tr": "durmak, durdurmak",
     "exampleSentence": "Please stop making so much noise."
   },
   {
     "word": "create",
     "meaning": "to make something new, or invent something",
+    "tr": "yaratmak, oluşturmak",
     "exampleSentence": "An artist can create beautiful paintings."
   },
   {
     "word": "speak",
     "meaning": "to say words, to use your voice",
+    "tr": "konuşmak",
     "exampleSentence": "She can speak three languages fluently."
   },
   {
     "word": "read",
     "meaning": "to look at and understand the meaning of written words",
+    "tr": "okumak",
     "exampleSentence": "I love to read books in my free time."
   },
   {
     "word": "allow",
     "meaning": "to give permission for someone to do something",
+    "tr": "izin vermek",
     "exampleSentence": "Smoking is not allowed in this building."
   },
   {
     "word": "add",
     "meaning": "to put something with something else",
+    "tr": "eklemek",
     "exampleSentence": "Please add some sugar to my coffee."
   },
   {
     "word": "spend",
     "meaning": "to give money as a payment for something",
+    "tr": "harcamak, geçirmek",
     "exampleSentence": "I plan to spend my vacation at the beach."
   },
   {
     "word": "grow",
     "meaning": "to increase in size or amount",
+    "tr": "büyümek",
     "exampleSentence": "Children grow so quickly."
   },
   {
     "word": "open",
     "meaning": "to move a door, window, or lid so that it is no longer closed",
+    "tr": "açmak",
     "exampleSentence": "Could you please open the window?"
   },
   {
     "word": "walk",
     "meaning": "to move along by putting one foot in front of the other",
+    "tr": "yürümek",
     "exampleSentence": "I like to walk my dog in the park."
   },
   {
     "word": "win",
     "meaning": "to achieve first position and/or get a prize in a competition",
+    "tr": "kazanmak",
     "exampleSentence": "I hope our team will win the game."
   },
   {
     "word": "offer",
     "meaning": "to ask someone if they would like to have something",
+    "tr": "teklif etmek, sunmak",
     "exampleSentence": "He decided to offer her the job."
   },
   {
     "word": "remember",
     "meaning": "to be able to bring back a piece of information into your mind",
+    "tr": "hatırlamak",
     "exampleSentence": "I can't remember his name."
   },
   {
     "word": "love",
     "meaning": "to have very strong feelings of affection for someone",
+    "tr": "sevmek",
     "exampleSentence": "Parents love their children unconditionally."
   },
   {
     "word": "consider",
     "meaning": "to think carefully about something",
+    "tr": "göz önünde bulundurmak, değerlendirmek",
     "exampleSentence": "You should consider all the options."
   },
   {
     "word": "appear",
     "meaning": "to start to be seen or to be present",
+    "tr": "görünmek",
     "exampleSentence": "A rainbow appeared in the sky after the rain."
   },
   {
     "word": "buy",
     "meaning": "to get something by paying money for it",
+    "tr": "satın almak",
     "exampleSentence": "I need to buy a new pair of shoes."
   },
   {
     "word": "wait",
     "meaning": "to allow time to go by until a future event happens",
+    "tr": "beklemek",
     "exampleSentence": "Please wait here until I return."
   },
   {
     "word": "serve",
     "meaning": "to provide food or drinks",
+    "tr": "hizmet etmek",
     "exampleSentence": "The restaurant will serve dinner until 10 PM."
   },
   {
     "word": "die",
     "meaning": "to stop living",
+    "tr": "ölmek",
     "exampleSentence": "All living things eventually die."
   },
   {
     "word": "send",
     "meaning": "to cause something to go from one place to another, especially by post or email",
+    "tr": "göndermek",
     "exampleSentence": "I will send you an email with the details."
   },
   {
     "word": "expect",
     "meaning": "to think that something will happen",
+    "tr": "beklemek, ummak",
     "exampleSentence": "I expect to finish the project by Friday."
   },
   {
     "word": "build",
     "meaning": "to construct something by putting parts or materials together",
+    "tr": "inşa etmek, kurmak",
     "exampleSentence": "They plan to build a new bridge."
   },
   {
     "word": "stay",
     "meaning": "to remain in the same place or condition",
+    "tr": "kalmak",
     "exampleSentence": "You can stay at our house for the weekend."
   },
   {
     "word": "fall",
     "meaning": "to suddenly go down onto the ground or towards the ground",
+    "tr": "düşmek",
     "exampleSentence": "Be careful not to fall on the ice."
   },
   {
     "word": "cut",
     "meaning": "to break the surface of something, or to divide or make something smaller, using a sharp tool",
+    "tr": "kesmek",
     "exampleSentence": "She cut the cake into eight pieces."
   },
   {
     "word": "reach",
     "meaning": "to arrive at a place, especially after spending a long time traveling",
+    "tr": "ulaşmak",
     "exampleSentence": "We will reach our destination in an hour."
   },
   {
     "word": "kill",
     "meaning": "to cause someone or something to die",
+    "tr": "öldürmek",
     "exampleSentence": "The poison can kill a person in minutes."
   },
   {
     "word": "remain",
     "meaning": "to stay in the same place or in the same condition",
+    "tr": "kalmak",
     "exampleSentence": "Only two minutes remain in the game."
   },
   {
     "word": "suggest",
     "meaning": "to mention an idea, possible plan, or action for other people to consider",
+    "tr": "önermek",
     "exampleSentence": "I suggest we go for a walk."
   },
   {
     "word": "raise",
     "meaning": "to lift something to a higher position",
+    "tr": "yükseltmek, büyütmek",
     "exampleSentence": "Please raise your hand if you have a question."
   },
   {
     "word": "pass",
     "meaning": "to go past something or someone",
+    "tr": "geçmek, geçirmek",
     "exampleSentence": "The car was moving too fast to pass safely."
   },
   {
     "word": "sell",
     "meaning": "to give something to someone else in return for money",
+    "tr": "satmak",
     "exampleSentence": "He wants to sell his old guitar."
   },
   {
     "word": "require",
     "meaning": "to need something or make something necessary",
+    "tr": "gerektirmek",
     "exampleSentence": "This job will require a lot of hard work."
   },
   {
     "word": "report",
     "meaning": "to give a description of something or information about it to someone",
+    "tr": "rapor etmek, bildirmek",
     "exampleSentence": "The witness must report everything she saw."
   },
   {
     "word": "decide",
     "meaning": "to choose something, especially after thinking carefully about several possibilities",
+    "tr": "karar vermek",
     "exampleSentence": "I can't decide which shirt to wear."
   },
   {
     "word": "pull",
     "meaning": "to move something towards yourself",
+    "tr": "çekmek",
     "exampleSentence": "Pull the door to open it."
   },
   {
     "word": "break",
     "meaning": "to separate into pieces",
+    "tr": "kırmak, bozmak",
     "exampleSentence": "Be careful not to break the glass."
   },
   {
     "word": "pick",
     "meaning": "to choose or select something",
+    "tr": "seçmek, toplamak",
     "exampleSentence": "Pick your favorite color."
   },
   {
     "word": "wear",
     "meaning": "to have clothing on your body",
+    "tr": "giymek, takmak",
     "exampleSentence": "What should I wear to the party?"
   },
   {
     "word": "carry",
     "meaning": "to hold and transport something",
+    "tr": "taşımak",
     "exampleSentence": "Can you help me carry these boxes?"
   },
   {
     "word": "catch",
     "meaning": "to capture or grab something",
+    "tr": "yakalamak",
     "exampleSentence": "Try to catch the ball!"
   },
   {
     "word": "drive",
     "meaning": "to operate a vehicle",
+    "tr": "sürmek",
     "exampleSentence": "I learned to drive when I was 18."
   },
   {
     "word": "throw",
     "meaning": "to propel something through the air",
+    "tr": "atmak, fırlatmak",
     "exampleSentence": "Throw the ball to me."
   },
   {
     "word": "return",
     "meaning": "to come or go back to a place",
+    "tr": "geri dönmek",
     "exampleSentence": "I will return home by 6 PM."
   },
   {
     "word": "explain",
     "meaning": "to make something clear or easy to understand",
+    "tr": "açıklamak",
     "exampleSentence": "Can you explain this concept to me?"
   },
   {
@@ -3031,7 +3134,6 @@
   {
     "word": "suffer",
     "meaning": "to experience or be subjected to (something bad or unpleasant)",
-
     "tr": "acı çekmek, muzdarip olmak",
     "exampleSentence": "Many people suffer from a lack of clean water."
   },
@@ -3364,7 +3466,8 @@
     "meaning": "having happened, begun, or been done not long ago",
     "tr": "yakın zamandaki, son",
     "exampleSentence": "A recent study shows the benefits of exercise."
-  },{
+  },
+  {
     "word": "bank",
     "meaning": "a financial establishment that invests money deposited by customers",
     "tr": "banka",
@@ -3597,7 +3700,8 @@
     "meaning": "with no part left out; whole",
     "tr": "tüm, bütün",
     "exampleSentence": "He ate the entire cake by himself."
-  },{
+  },
+  {
     "word": "claim",
     "meaning": "to state or assert that something is the case, typically without providing evidence or proof",
     "tr": "iddia etmek",
@@ -4070,7 +4174,8 @@
     "meaning": "to point out; show",
     "tr": "göstermek, belirtmek",
     "exampleSentence": "The road signs indicate that we should turn left."
-  },{
+  },
+  {
     "word": "argue",
     "meaning": "to give reasons or cite evidence in support of an idea, action, or theory",
     "tr": "tartışmak, savunmak",
@@ -4309,7 +4414,8 @@
     "meaning": "a diagrammatic representation of an area of land or sea showing physical features, cities, roads, etc.",
     "tr": "harita",
     "exampleSentence": "I need a map to find my way around the city."
-  },{
+  },
+  {
     "word": "agreement",
     "meaning": "a negotiated and typically legally binding arrangement between parties",
     "tr": "anlaşma, sözleşme",
@@ -4548,7 +4654,8 @@
     "meaning": "to unite; merge",
     "tr": "birleştirmek",
     "exampleSentence": "The chef will combine all the ingredients to make the sauce."
-  },{
+  },
+  {
     "word": "conference",
     "meaning": "a formal meeting for discussion",
     "tr": "konferans",
@@ -4787,7 +4894,8 @@
     "meaning": "to put something on top of or in front of (something), especially to protect or conceal it",
     "tr": "örtmek, kapak",
     "exampleSentence": "She covered her face with her hands."
-  },{
+  },
+  {
     "word": "experiment",
     "meaning": "a scientific procedure undertaken to make a discovery, test a hypothesis, or demonstrate a known fact",
     "tr": "deney",
@@ -5272,7 +5380,8 @@
     "meaning": "feeling fear or anxiety; frightened",
     "tr": "korkmuş",
     "exampleSentence": "Many children are afraid of the dark."
-  },{
+  },
+  {
     "word": "journey",
     "meaning": "an act of traveling from one place to another",
     "tr": "yolculuk",
@@ -5511,7 +5620,8 @@
     "meaning": "to express dissatisfaction or annoyance about a state of affairs or an event",
     "tr": "şikayet etmek",
     "exampleSentence": "He's always complaining about the weather."
-  },{
+  },
+  {
     "word": "satisfy",
     "meaning": "to meet the expectations, needs, or desires of (someone)",
     "tr": "tatmin etmek",
@@ -5757,6 +5867,4 @@
     "tr": "evrensel",
     "exampleSentence": "Music is often called the universal language."
   }
-
-
 ]

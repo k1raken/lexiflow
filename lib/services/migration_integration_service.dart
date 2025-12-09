@@ -23,7 +23,7 @@ class MigrationIntegrationService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (kDebugMode) {
-          debugPrint('❌ No authenticated user for migration check');
+
         }
         return false;
       }
@@ -32,18 +32,18 @@ class MigrationIntegrationService {
 
       if (isNeeded) {
         if (kDebugMode) {
-          debugPrint('🔄 Migration needed for user: ${user.uid}');
+
         }
         return true; // Migration screen should be shown
       } else {
         if (kDebugMode) {
-          debugPrint('✅ No migration needed for user: ${user.uid}');
+
         }
         return false; // Continue to normal app flow
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error checking migration status: $e');
+
       }
       return false; // Continue to normal app flow on error
     }
@@ -58,7 +58,7 @@ class MigrationIntegrationService {
       return await _migrationService.getMigrationStatus(user.uid);
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error getting migration status: $e');
+
       }
       return null;
     }
@@ -70,7 +70,7 @@ class MigrationIntegrationService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (kDebugMode) {
-          debugPrint('❌ No authenticated user for migration');
+
         }
         return false;
       }
@@ -78,7 +78,7 @@ class MigrationIntegrationService {
       return await _migrationService.migrateHiveToFirestore(user.uid);
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error starting migration: $e');
+
       }
       return false;
     }
@@ -90,7 +90,7 @@ class MigrationIntegrationService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (kDebugMode) {
-          debugPrint('❌ No authenticated user for migration retry');
+
         }
         return false;
       }
@@ -98,7 +98,7 @@ class MigrationIntegrationService {
       return await _migrationService.retryMigration(user.uid);
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error retrying migration: $e');
+
       }
       return false;
     }
@@ -110,7 +110,7 @@ class MigrationIntegrationService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (kDebugMode) {
-          debugPrint('❌ No authenticated user for word service');
+
         }
         return null;
       }
@@ -121,19 +121,19 @@ class MigrationIntegrationService {
 
       if (migrationStatus != null && migrationStatus['isCompleted'] == true) {
         if (kDebugMode) {
-          debugPrint('✅ Using Firestore word service');
+
         }
         return _firestoreWordService;
       } else {
         if (kDebugMode) {
-          debugPrint('⚠️ Migration not completed, using fallback');
+
         }
         // Return fallback service or handle appropriately
         return _firestoreWordService; // Use Firestore service as fallback
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error getting word service: $e');
+
       }
       return _firestoreWordService; // Use Firestore service as fallback
     }
@@ -145,7 +145,7 @@ class MigrationIntegrationService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (kDebugMode) {
-          debugPrint('❌ No authenticated user for progress service');
+
         }
         return null;
       }
@@ -156,18 +156,18 @@ class MigrationIntegrationService {
 
       if (migrationStatus != null && migrationStatus['isCompleted'] == true) {
         if (kDebugMode) {
-          debugPrint('✅ Using Firestore progress service');
+
         }
         return _progressService;
       } else {
         if (kDebugMode) {
-          debugPrint('⚠️ Migration not completed, using fallback');
+
         }
         return _progressService; // Use Firestore service as fallback
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error getting progress service: $e');
+
       }
       return _progressService; // Use Firestore service as fallback
     }
@@ -179,7 +179,7 @@ class MigrationIntegrationService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (kDebugMode) {
-          debugPrint('❌ No authenticated user for activity service');
+
         }
         return null;
       }
@@ -190,18 +190,18 @@ class MigrationIntegrationService {
 
       if (migrationStatus != null && migrationStatus['isCompleted'] == true) {
         if (kDebugMode) {
-          debugPrint('✅ Using Firestore activity service');
+
         }
         return _activityService;
       } else {
         if (kDebugMode) {
-          debugPrint('⚠️ Migration not completed, using fallback');
+
         }
         return _activityService; // Use Firestore service as fallback
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error getting activity service: $e');
+
       }
       return _activityService; // Use Firestore service as fallback
     }
@@ -213,13 +213,13 @@ class MigrationIntegrationService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (kDebugMode) {
-          debugPrint('❌ No authenticated user - skipping migration screen');
+
         }
         return false;
       }
 
       if (kDebugMode) {
-        debugPrint('🔍 Checking migration status for user: ${user.uid}');
+
       }
 
       final migrationStatus = await _migrationService.getMigrationStatus(
@@ -229,7 +229,7 @@ class MigrationIntegrationService {
       // Eğer migration status alınamazsa (null), ana ekrana geç
       if (migrationStatus == null) {
         if (kDebugMode) {
-          debugPrint('⚠️ Migration status alınamadı - ana ekrana geçiliyor');
+
         }
         return false;
       }
@@ -238,26 +238,26 @@ class MigrationIntegrationService {
       final isCompleted = migrationStatus['isCompleted'] as bool? ?? false;
       if (isCompleted) {
         if (kDebugMode) {
-          debugPrint('✅ Migration tamamlanmış - ana ekrana geçiliyor');
+
         }
         return false;
       }
 
       // Migration tamamlanmamışsa migration screen göster
       if (kDebugMode) {
-        debugPrint('🔄 Migration tamamlanmamış - migration screen gösteriliyor');
+
       }
       return true;
 
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Migration kontrolü başarısız: $e');
+
         // Firestore permission-denied veya diğer hatalar durumunda
         if (e.toString().contains('permission-denied') || 
             e.toString().contains('PERMISSION_DENIED')) {
-          debugPrint('🔒 Firestore erişim izni yok - ana ekrana geçiliyor');
+
         } else {
-          debugPrint('⚠️ Migration kontrolü hatası - ana ekrana geçiliyor');
+
         }
       }
       // Hata durumunda kesinlikle migration screen'i atla ve ana ekrana geç

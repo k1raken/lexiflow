@@ -50,33 +50,28 @@ class MigrationService {
 
   Future<bool> isMigrationNeeded(String userId) async {
     try {
-      debugPrint('🔍 Checking migration status for userId: $userId');
+
       final migrationPath = FirestoreSchema.getMigrationStatusPath(userId);
-      debugPrint('🔍 Migration path: $migrationPath');
 
       final migrationDoc = await _firestore.doc(migrationPath).get();
 
       if (!migrationDoc.exists) {
-        debugPrint('✅ No migration status found - migration needed');
+
         return true;
       }
 
       final data = migrationDoc.data() as Map<String, dynamic>;
       final isCompleted = data['isCompleted'] as bool? ?? false;
-      debugPrint(
-        '✅ Migration status: ${isCompleted ? "completed" : "incomplete"}',
-      );
+
       return !isCompleted;
     } catch (e, stackTrace) {
-      debugPrint('❌ Error checking migration status: $e');
-      debugPrint('❌ Stack trace: $stackTrace');
+
       return true; // hata durumunda migration gerekli varsay
     }
   }
 
   Future<bool> migrateHiveToFirestore(String userId) async {
     try {
-      debugPrint('🚀 Starting migration for user: $userId');
 
       await _initializeMigrationStatus(userId);
 
@@ -95,10 +90,9 @@ class MigrationService {
       // Step 5: Complete migration
       await _completeMigration(userId);
 
-      debugPrint('✅ Migration completed successfully');
       return true;
     } catch (e) {
-      debugPrint('❌ Migration failed: $e');
+
       await _recordMigrationError(userId, e.toString());
       return false;
     }
@@ -106,9 +100,8 @@ class MigrationService {
 
   Future<void> _initializeMigrationStatus(String userId) async {
     try {
-      debugPrint('🔍 Initializing migration status for userId: $userId');
+
       final migrationPath = FirestoreSchema.getMigrationStatusPath(userId);
-      debugPrint('🔍 Migration status path: $migrationPath');
 
       final migrationData = FirestoreSchema.createMigrationStatus(
         isCompleted: false,
@@ -116,12 +109,10 @@ class MigrationService {
       );
 
       await _firestore.doc(migrationPath).set(migrationData);
-      debugPrint('✅ Migration status initialized');
 
       _updateProgress('Initializing migration...', 0.0);
     } catch (e, stackTrace) {
-      debugPrint('❌ Error initializing migration status: $e');
-      debugPrint('❌ Stack trace: $stackTrace');
+
       rethrow;
     }
   }
@@ -136,8 +127,6 @@ class MigrationService {
 
       _totalWords = words.length;
       _migratedWords = 0;
-
-      debugPrint('📚 Found ${words.length} words to migrate');
 
       // batch'ler halinde migrate et
       for (
@@ -157,7 +146,6 @@ class MigrationService {
 
           try {
             final wordPath = FirestoreSchema.getPublicWordPath(wordId);
-            debugPrint('🔍 Word path: $wordPath (original: ${word.word})');
 
             final wordData = FirestoreSchema.createPublicWord(
               wordId: wordId,
@@ -175,9 +163,7 @@ class MigrationService {
             _migratedWords++;
           } catch (e) {
             if (kDebugMode) {
-              debugPrint(
-                '❌ Error preparing word migration for "${word.word}": $e',
-              );
+
             }
             rethrow;
           }
@@ -196,11 +182,11 @@ class MigrationService {
       }
 
       if (kDebugMode) {
-        debugPrint('✅ Migrated $_migratedWords words');
+
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error migrating words: $e');
+
       }
       rethrow;
     }
@@ -217,8 +203,6 @@ class MigrationService {
       _totalProgress = progressData.length;
       _migratedProgress = 0;
 
-      debugPrint('📊 Found ${progressData.length} progress entries to migrate');
-
       final batch = _firestore.batch();
       int batchCount = 0;
 
@@ -231,7 +215,6 @@ class MigrationService {
             userId,
             wordId,
           );
-          debugPrint('🔍 Progress path: $progressPath (wordId: $wordId)');
 
           final progressData = FirestoreSchema.createUserWordProgress(
             wordId: wordId,
@@ -261,9 +244,7 @@ class MigrationService {
           batchCount++;
         } catch (e) {
           if (kDebugMode) {
-            debugPrint(
-              '❌ Error preparing progress migration for wordId "$wordId": $e',
-            );
+
           }
           rethrow;
         }
@@ -289,11 +270,11 @@ class MigrationService {
       }
 
       if (kDebugMode) {
-        debugPrint('✅ Migrated $_migratedProgress progress entries');
+
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error migrating progress: $e');
+
       }
       rethrow;
     }
@@ -310,8 +291,6 @@ class MigrationService {
       _totalActivities = activities.length;
       _migratedActivities = 0;
 
-      debugPrint('📈 Found ${activities.length} activities to migrate');
-
       final batch = _firestore.batch();
       int batchCount = 0;
 
@@ -325,7 +304,7 @@ class MigrationService {
             timestamp,
           );
           if (kDebugMode) {
-            debugPrint('🔍 Activity path: $activityPath');
+
           }
 
           final activityDoc = FirestoreSchema.createUserActivity(
@@ -345,7 +324,7 @@ class MigrationService {
           batchCount++;
         } catch (e) {
           if (kDebugMode) {
-            debugPrint('❌ Error preparing activity migration: $e');
+
           }
           rethrow;
         }
@@ -370,11 +349,11 @@ class MigrationService {
       }
 
       if (kDebugMode) {
-        debugPrint('✅ Migrated $_migratedActivities activities');
+
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error migrating activities: $e');
+
       }
       rethrow;
     }
@@ -408,9 +387,8 @@ class MigrationService {
             .update(updatedStats);
       }
 
-      debugPrint('✅ Updated user stats');
     } catch (e) {
-      debugPrint('❌ Error updating stats: $e');
+
       rethrow;
     }
   }
@@ -437,9 +415,8 @@ class MigrationService {
       // başarılı migration sonrası Hive verilerini temizle
       await _cleanupHiveData();
 
-      debugPrint('✅ Migration completed successfully');
     } catch (e) {
-      debugPrint('❌ Error completing migration: $e');
+
       rethrow;
     }
   }
@@ -459,13 +436,12 @@ class MigrationService {
           .doc(FirestoreSchema.getMigrationStatusPath(userId))
           .update(migrationData);
     } catch (e) {
-      debugPrint('❌ Error recording migration error: $e');
+
     }
   }
 
   Future<void> _cleanupHiveData() async {
     try {
-      debugPrint('🧹 Cleaning up Hive data...');
 
       final boxes = ['words', 'user_progress', 'user_activities'];
 
@@ -475,21 +451,20 @@ class MigrationService {
           if (Hive.isBoxOpen(boxName)) {
             final box = Hive.box(boxName);
             await box.close();
-            debugPrint('📦 Closed Hive box: $boxName');
+
           }
 
           // diskten sil (box kapalı olsa da çalışır)
           await Hive.deleteBoxFromDisk(boxName);
-          debugPrint('✅ Deleted Hive box from disk: $boxName');
+
         } catch (e) {
-          debugPrint('⚠️ Could not delete Hive box $boxName: $e');
+
           // bir box silinmezse diğerleriyle devam et
         }
       }
 
-      debugPrint('✅ Hive cleanup completed');
     } catch (e) {
-      debugPrint('❌ Error cleaning up Hive data: $e');
+
     }
   }
 
@@ -515,7 +490,7 @@ class MigrationService {
   Future<bool> retryMigration(String userId) async {
     try {
       if (kDebugMode) {
-        debugPrint('🔄 Retrying migration for user: $userId');
+
       }
 
       // sayaçları sıfırla
@@ -526,7 +501,7 @@ class MigrationService {
       return await migrateHiveToFirestore(userId);
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Retry migration failed: $e');
+
       }
       return false;
     }
@@ -542,7 +517,7 @@ class MigrationService {
       return doc.data();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error getting migration status: $e');
+
       }
       return null;
     }

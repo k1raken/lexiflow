@@ -1,19 +1,15 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 import '../providers/theme_provider.dart';
 import '../utils/design_system.dart';
 import '../services/notification_service.dart';
 import '../di/locator.dart';
 import '../services/session_service.dart';
+import '../services/user_service.dart';
+import '../services/feedback_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -25,7 +21,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen>
     with TickerProviderStateMixin {
   bool _notificationsEnabled = true;
-  final bool _isLoading = false;
   bool _dailyWordEnabled = false;
   TimeOfDay _dailyWordTime = const TimeOfDay(hour: 9, minute: 0);
   bool _dailyWordWeekdaysOnly = false;
@@ -69,7 +64,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         _dailyWordWeekdaysOnly = dailyWeekdaysOnly;
       });
     } catch (e) {
-      print('Error loading notification settings: $e');
     }
   }
 
@@ -93,7 +87,6 @@ class _SettingsScreenState extends State<SettingsScreen>
 
       HapticFeedback.lightImpact();
     } catch (e) {
-      print('Error toggling notifications: $e');
     }
   }
 
@@ -113,7 +106,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         await notificationService.applySchedulesFromPrefs(userId: userId);
       }
     } catch (e) {
-      print('Error updating daily word toggle: $e');
     } finally {
       if (mounted) {
         setState(() => _isUpdatingDailyWord = false);
@@ -137,7 +129,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         await notificationService.applySchedulesFromPrefs(userId: userId);
       }
     } catch (e) {
-      print('Error updating daily word weekdays preference: $e');
     } finally {
       if (mounted) {
         setState(() => _isUpdatingDailyWord = false);
@@ -178,7 +169,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         await notificationService.applySchedulesFromPrefs(userId: userId);
       }
     } catch (e) {
-      print('Error updating daily word time: $e');
     } finally {
       if (mounted) {
         setState(() => _isUpdatingDailyWord = false);
@@ -188,15 +178,18 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   void _showFeedbackDialog() {
     HapticFeedback.mediumImpact();
+    // Capture parent ScaffoldMessenger to pass to dialog
+    final parentMessenger = ScaffoldMessenger.of(context);
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _FeedbackDialog(),
+      builder: (context) => _FeedbackDialog(parentMessenger: parentMessenger),
     );
   }
 
   void _navigateToPrivacyPolicy() {
     HapticFeedback.lightImpact();
+    if (!mounted) return;
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -214,6 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   void _navigateToTermsOfService() {
     HapticFeedback.lightImpact();
+    if (!mounted) return;
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -326,6 +320,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                       SizedBox(height: availableHeight * 0.03), // 3% spacing
                       // Feedback Button
                       _buildFeedbackButton(isDark, screenHeight, screenWidth),
+
+                      SizedBox(height: availableHeight * 0.03), // 3% spacing
+                      // Logout Button
+                      _buildLogoutButton(isDark, screenHeight, screenWidth),
+
+                      SizedBox(height: availableHeight * 0.03), // 3% spacing
+                      // Delete Account Button (Danger Zone)
+                      _buildDeleteAccountButton(isDark, screenHeight, screenWidth),
 
                       SizedBox(height: availableHeight * 0.02), // 2% spacing
                     ],
@@ -1149,9 +1151,279 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
     );
   }
+
+  Widget _buildLogoutButton(
+    bool isDark,
+    double screenHeight,
+    double screenWidth,
+  ) {
+    final buttonHeight = screenHeight * 0.06;
+
+    Future<void> handleLogout() async {
+      HapticFeedback.lightImpact();
+      final sessionService = locator<SessionService>();
+      await sessionService.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.02),
+      child: SizedBox(
+        width: double.infinity,
+        height: buttonHeight.clamp(44.0, 60.0),
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(
+              color:
+                  isDark
+                      ? AppDarkColors.textSecondary
+                      : Colors.black.withOpacity(0.2),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            backgroundColor:
+                isDark
+                    ? AppDarkColors.surface
+                    : Colors.white,
+          ),
+          onPressed: handleLogout,
+          icon: Icon(
+            Icons.logout_rounded,
+            color:
+                isDark
+                    ? AppDarkColors.textPrimary
+                    : Colors.black.withOpacity(0.7),
+          ),
+          label: Text(
+            'Oturumu Kapat',
+            style: AppTextStyles.button.copyWith(
+              color:
+                  isDark
+                      ? AppDarkColors.textPrimary
+                      : Colors.black.withOpacity(0.85),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteAccountButton(
+    bool isDark,
+    double screenHeight,
+    double screenWidth,
+  ) {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.symmetric(horizontal: screenWidth * 0.02),
+      child: TextButton(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          _showDeleteConfirmation(context);
+        },
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: Colors.red.withOpacity(0.5),
+              width: 1,
+            ),
+          ),
+          backgroundColor: Colors.red.withOpacity(0.05),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.delete_forever_rounded,
+              color: Colors.red,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Hesabımı Sil',
+              style: AppTextStyles.body1.copyWith(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext parentContext) {
+    final confirmationController = TextEditingController();
+    final isDark = Theme.of(parentContext).brightness == Brightness.dark;
+
+    // Capture Root Navigator for explicit dialog dismissal
+    final rootNav = Navigator.of(parentContext, rootNavigator: true);
+
+    showDialog(
+      context: parentContext,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? AppDarkColors.surface : Colors.white,
+        title: Text(
+          'Hesabı Sil?',
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Bu işlem geri alınamaz. Tüm verileriniz (ilerleme, kelimeler, istatistikler) kalıcı olarak silinecektir.',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: confirmationController,
+              decoration: InputDecoration(
+                labelText: "Onaylamak için kutuya 'SIL' yazın",
+                labelStyle: TextStyle(
+                  color: isDark ? Colors.white60 : Colors.grey[600],
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                    color: isDark ? Colors.white24 : Colors.grey[300]!,
+                  ),
+                ),
+                focusedBorder: const OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.red),
+                ),
+              ),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
+              textCapitalization: TextCapitalization.characters,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              'İptal',
+              style: TextStyle(
+                color: isDark ? Colors.white60 : Colors.grey[600],
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              // 1. Validation
+              if (confirmationController.text.trim().toUpperCase() != 'SIL') {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text("Lütfen doğrulamak için 'SIL' yazın"),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                return;
+              }
+
+              // 2. Close the confirmation dialog
+              Navigator.of(dialogContext).pop();
+
+              // 3. Show loading dialog using PARENT context
+              showDialog(
+                context: parentContext,
+                barrierDismissible: false,
+                builder: (_) => const Center(child: CircularProgressIndicator()),
+              );
+
+              try {
+                // 4. Try to delete account
+                await locator<UserService>().deleteUserAccount();
+
+                // Happy Path: Success
+                if (parentContext.mounted) {
+                  // Explicitly pop the loading dialog using root navigator
+                  try {
+                    rootNav.pop();
+                  } catch (_) {}
+                  
+                  Navigator.of(parentContext).pushNamedAndRemoveUntil('/login', (route) => false);
+                }
+              } catch (e) {
+                // Error Handling
+                final msg = e.toString();
+                
+                // Check for Security/Re-login Error
+                if (msg.contains('Güvenlik gereği') || msg.contains('requires-recent-login')) {
+                  if (parentContext.mounted) {
+                    // Explicitly pop the loading dialog using root navigator
+                    try {
+                      rootNav.pop();
+                    } catch (_) {}
+                    
+                    // Show warning
+                    ScaffoldMessenger.of(parentContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('Güvenlik gereği tekrar giriş yapmalısınız. Yönlendiriliyorsunuz...'),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+
+                    // Allow user to read message briefly
+                    await Future.delayed(const Duration(seconds: 2));
+
+                    // Aggressive Logout Strategy with Timeout
+                    try {
+                      await locator<SessionService>().signOut().timeout(
+                        const Duration(seconds: 2),
+                        onTimeout: () {
+                          // Just return null to proceed
+                        },
+                      );
+                    } catch (_) {
+                      // Ignore all errors (network, timeout, etc.)
+                    }
+
+                    // Force Navigation to Login
+                    if (parentContext.mounted) {
+                      Navigator.of(parentContext).pushNamedAndRemoveUntil('/login', (route) => false);
+                    }
+                  }
+                } else {
+                  // Other Errors (e.g. Network)
+                  if (parentContext.mounted) {
+                    // Explicitly pop the loading dialog using root navigator
+                    try {
+                      rootNav.pop();
+                    } catch (_) {}
+                    
+                    ScaffoldMessenger.of(parentContext).showSnackBar(
+                      SnackBar(
+                        content: Text('Hata: ${msg.replaceAll("Exception: ", "")}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+            child: const Text('SİL', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _FeedbackDialog extends StatefulWidget {
+  final ScaffoldMessengerState parentMessenger;
+
+  const _FeedbackDialog({required this.parentMessenger});
+
   @override
   State<_FeedbackDialog> createState() => _FeedbackDialogState();
 }
@@ -1161,110 +1433,89 @@ class _FeedbackDialogState extends State<_FeedbackDialog> {
   bool _isSubmitting = false;
 
   Future<void> _submitFeedback() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final feedbackText = _feedbackController.text.trim();
+    // Use the parent messenger passed from the Settings screen
+    // This ensures SnackBar shows on the main screen, not the dialog
+    final messenger = widget.parentMessenger;
+    final navigator = Navigator.of(context);
+    final feedbackText = _feedbackController.text;
 
-    if (feedbackText.isEmpty) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: const Text('Geri bildirim alanı boş bırakılamaz.'),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-      return;
-    }
-
+    // Unfocus keyboard before async operations
     FocusScope.of(context).unfocus();
 
+    if (!mounted) return;
+
+    // Show loading indicator
     setState(() {
       _isSubmitting = true;
     });
 
     try {
       final session = locator<SessionService>();
-      final firebaseUser = session.currentUser;
-      final offlineUser = session.offlineUser;
-      final platformName =
-          Theme.of(context).platform.toString().split('.').last;
+      final feedbackService = FeedbackService();
 
-      String appVersion = '';
-      String buildNumber = '';
-      try {
-        final info = await PackageInfo.fromPlatform();
-        appVersion = info.version;
-        buildNumber = info.buildNumber;
-      } catch (e) {
-        debugPrint('Feedback: failed to load package info: ' + e.toString());
-      }
-
-      final deviceInfoPlugin = DeviceInfoPlugin();
-      Map<String, dynamic> deviceInfo = {};
-      try {
-        if (Platform.isAndroid) {
-          final info = await deviceInfoPlugin.androidInfo;
-          deviceInfo = {
-            'manufacturer': info.manufacturer,
-            'model': info.model,
-            'version': info.version.release,
-            'sdkInt': info.version.sdkInt,
-          };
-        } else if (Platform.isIOS) {
-          final info = await deviceInfoPlugin.iosInfo;
-          deviceInfo = {
-            'name': info.name,
-            'systemName': info.systemName,
-            'systemVersion': info.systemVersion,
-            'model': info.utsname.machine,
-          };
-        } else {
-          final info = await deviceInfoPlugin.deviceInfo;
-          deviceInfo = Map<String, dynamic>.from(info.data);
-        }
-      } catch (e) {
-        debugPrint('Feedback: failed to load device info: ' + e.toString());
-      }
-
-      await FirebaseFirestore.instance.collection('feedback').add({
-        'text': feedbackText,
-        'message': feedbackText,
-        'userId': firebaseUser?.uid ?? offlineUser?.uid ?? 'guest',
-        'userEmail': firebaseUser?.email ?? '',
-        'displayName': firebaseUser?.displayName ?? 'Guest',
-        'isGuest': session.isGuest,
-        'platform': platformName,
-        'platformOs': Platform.operatingSystem,
-        'appVersion': appVersion,
-        'buildNumber': buildNumber,
-        'deviceInfo': deviceInfo,
-        'submittedAt': FieldValue.serverTimestamp(),
-        'timestamp': FieldValue.serverTimestamp(),
-        'submittedAtLocal': DateTime.now().toIso8601String(),
-        'source': 'settings_screen',
-      });
-
-      _feedbackController.clear();
+      // Perform async Firestore write
+      final result = await feedbackService.submitFeedback(
+        message: feedbackText,
+        uid: session.currentUser?.uid ?? session.offlineUser?.uid,
+        email: session.currentUser?.email,
+      );
 
       if (!mounted) return;
 
-      Navigator.of(context).pop();
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Teşekkürler! Geri bildirimin gönderildi.'),
-        ),
-      );
-    } catch (e) {
-      debugPrint('Feedback submission failed: ' + e.toString());
-      if (mounted) {
+      if (result.isSuccess) {
+        // Success flow (order is critical):
+        // 1. Clear the text field for next time
+        _feedbackController.clear();
+        
+        // 2. Close the dialog FIRST using captured navigator
+        navigator.pop();
+        
+        // 3. THEN show success message using captured messenger
+        // This works because messenger was captured before dialog context was destroyed
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Gönderim sırasında bir hata oluştu. Lütfen tekrar dene.'),
+          SnackBar(
+            content: const Text('Geri bildiriminiz gönderildi. Görüşleriniz dikkate alınacaktır.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        // Error - keep dialog open so user can retry
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Bir hata oluştu.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        // Keep dialog open on error so user can retry
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Gönderim sırasında bir hata oluştu. Lütfen tekrar dene.',
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
     } finally {
+      // Hide loading indicator
       if (mounted) {
         setState(() {
           _isSubmitting = false;
@@ -1311,6 +1562,7 @@ class _FeedbackDialogState extends State<_FeedbackDialog> {
             TextField(
               controller: _feedbackController,
               maxLines: 4,
+              maxLength: 500,
               decoration: InputDecoration(
                 hintText: 'Düşüncelerini paylaş...',
                 hintStyle: AppTextStyles.body2.copyWith(

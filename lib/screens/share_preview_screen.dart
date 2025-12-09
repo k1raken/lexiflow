@@ -112,10 +112,7 @@ class _SharePreviewScreenState extends State<SharePreviewScreen>
             _showError("Görüntü oluşturulamadı ❌");
             return;
           }
-          
-          debugPrint("Captured image successfully at ${DateTime.now()}");
-          debugPrint("Image size: ${pngBytes.length} bytes");
-          
+
           // Create a temporary file and save to gallery using gal
           final tempDir = await getTemporaryDirectory();
           final file = File('${tempDir.path}/lexiflow_stats_${DateTime.now().millisecondsSinceEpoch}.png');
@@ -132,7 +129,7 @@ class _SharePreviewScreenState extends State<SharePreviewScreen>
           if (Navigator.canPop(context)) Navigator.pop(context);
         } catch (e) {
           _showError("Kaydetme hatası: $e");
-          debugPrint("Save error: $e");
+
         } finally {
           if (mounted) {
             setState(() => _isLoading = false);
@@ -141,7 +138,7 @@ class _SharePreviewScreenState extends State<SharePreviewScreen>
       });
     } catch (e) {
       _showError("Kaydetme hatası: $e");
-      debugPrint("Save error: $e");
+
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -763,6 +760,5 @@ class _SharePreviewScreenState extends State<SharePreviewScreen>
       ),
     );
   }
-
 
 }

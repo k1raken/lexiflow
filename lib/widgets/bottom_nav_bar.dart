@@ -17,12 +17,9 @@ class CustomBottomNavBar extends StatelessWidget {
     final bottomInset = viewPadding.bottom;
     final effectiveBottom = bottomInset > 0 ? bottomInset : 6.0;
 
-    return SafeArea(
-      top: false,
-      minimum: EdgeInsets.only(bottom: bottomInset),
-      child: Container(
-        padding: EdgeInsets.only(bottom: effectiveBottom),
-        height: 70 + (bottomInset > 0 ? bottomInset : 0),
+    return Container(
+      padding: EdgeInsets.zero,
+      height: 70,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -63,7 +60,6 @@ class CustomBottomNavBar extends StatelessWidget {
                   label: 'Quiz',
                 ),
                 const SizedBox(width: 64),
-                // TODO: Re-enable Leaderboard UI if needed later
                 // Previously: Leaderboard tab/button was here.
                 _NavItem(
                   index: 3,
@@ -89,8 +85,8 @@ class CustomBottomNavBar extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
+        )
+      
     );
   }
 }
@@ -101,8 +97,8 @@ class _NavItem extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
     required this.icon,
-    required this.label,
     this.selectedIcon,
+    required this.label,
   });
 
   final int index;
@@ -208,7 +204,7 @@ class _CenterButton extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 1),
         AnimatedOpacity(
           duration: const Duration(milliseconds: 200),
           opacity: isSelected ? 1.0 : 0.8,

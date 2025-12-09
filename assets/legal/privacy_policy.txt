@@ -32,6 +32,6 @@ All data is stored on secure Google Firebase servers with restricted access and 
 
 7. Contact  
 If you have any questions about this policy or how we handle data, contact us at:  
-📧 kirakendev@gmail.com
+📧 your-email@example.com
 
 By using LexiFlow, you agree to this Privacy Policy.

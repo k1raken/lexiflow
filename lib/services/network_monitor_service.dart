@@ -149,7 +149,7 @@ class NetworkMonitorService {
         );
       }
     } catch (e) {
-      debugPrint('Otomatik misafir girişi başarısız: $e');
+
     }
   }
 

@@ -154,7 +154,6 @@ mixin SafeAnimationMixin<T extends StatefulWidget> on State<T>
     try {
       await _safeController.forward();
     } catch (e) {
-      print('Animation error: $e');
       _safeController.reset();
     }
   }
@@ -164,7 +163,6 @@ mixin SafeAnimationMixin<T extends StatefulWidget> on State<T>
     try {
       await _safeController.reverse();
     } catch (e) {
-      print('Animation error: $e');
       _safeController.reset();
     }
   }
@@ -174,7 +172,6 @@ mixin SafeAnimationMixin<T extends StatefulWidget> on State<T>
     try {
       _safeController.reset();
     } catch (e) {
-      print('Animation reset error: $e');
     }
   }
 }

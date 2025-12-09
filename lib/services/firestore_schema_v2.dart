@@ -243,36 +243,6 @@ class FirestoreSchemaV2 {
   }
 
   // ===========================================
-  // LEADERBOARD COLLECTION (OPTIONAL)
-  // ===========================================
-
-  static const String leaderboardCollection = 'leaderboard_stats';
-
-  /// Create leaderboard stats document
-  static Map<String, dynamic> createLeaderboardStats({
-    required String userId,
-    required String displayName,
-    int wordsLearned = 0,
-    int xp = 0,
-    int level = 1,
-    int streak = 0,
-    DateTime? lastUpdated,
-  }) {
-    return {
-      'userId': userId,
-      'displayName': displayName,
-      'wordsLearned': wordsLearned,
-      'xp': xp,
-      'level': level,
-      'streak': streak,
-      'lastUpdated':
-          lastUpdated != null
-              ? Timestamp.fromDate(lastUpdated)
-              : FieldValue.serverTimestamp(),
-    };
-  }
-
-  // ===========================================
   // MIGRATION HELPERS
   // ===========================================
 

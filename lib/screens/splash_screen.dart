@@ -66,7 +66,6 @@ class _SplashScreenState extends State<SplashScreen>
       
       if (mounted) {
         final totalTime = DateTime.now().difference(initializationTime);
-        print('🚀 [Splash] Total splash duration: ${totalTime.inMilliseconds}ms');
         
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
@@ -84,7 +83,6 @@ class _SplashScreenState extends State<SplashScreen>
         );
       }
     } catch (e) {
-      print('⚠️ [Splash] Error during initialization: $e');
       // Hata durumunda bile minimum süre sonra geçiş yap
       if (mounted) {
         Navigator.of(context).pushReplacement(

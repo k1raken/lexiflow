@@ -1,5 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:animations/animations.dart';
+import 'package:lexiflow/utils/transitions.dart';
+import 'package:lexiflow/utils/feature_flags.dart';
 import '../models/word_model.dart';
 import '../services/word_loader.dart';
 import '../services/session_service.dart';
@@ -8,10 +11,7 @@ import '../utils/logger.dart';
 class FillBlanksQuizScreen extends StatefulWidget {
   final String category;
 
-  const FillBlanksQuizScreen({
-    super.key,
-    required this.category,
-  });
+  const FillBlanksQuizScreen({super.key, required this.category});
 
   @override
   State<FillBlanksQuizScreen> createState() => _FillBlanksQuizScreenState();
@@ -52,15 +52,18 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
       });
 
       final allWords = await WordLoader.loadCategoryWords(widget.category);
-      
+
       // kullanılmamış kelimeleri filtrele
-      final availableWords = allWords.where((word) => 
-        !_usedWordsInSession.contains(word.word)).toList();
-      
+      final availableWords =
+          allWords
+              .where((word) => !_usedWordsInSession.contains(word.word))
+              .toList();
+
       if (availableWords.length < _maxQuestions) {
         setState(() {
           _hasError = true;
-          _errorMessage = 'Bu kategoride yeterli yeni kelime bulunamadı. '
+          _errorMessage =
+              'Bu kategoride yeterli yeni kelime bulunamadı. '
               'En az $_maxQuestions kelime gerekli, ${availableWords.length} mevcut.\n\n'
               'Kelimeleri sıfırlamak için "Kelimeleri Sıfırla" butonuna tıklayın.';
           _isLoading = false;
@@ -72,7 +75,7 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
       final random = Random();
       availableWords.shuffle(random);
       final selectedWords = availableWords.take(_maxQuestions).toList();
-      
+
       // seçilen kelimeleri kullanılan listesine ekle
       for (final word in selectedWords) {
         _usedWordsInSession.add(word.word);
@@ -96,39 +99,42 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
   void _generateQuestions() async {
     final random = Random();
     _questions = [];
-    
+
     // tüm kategori kelimelerini yanlış seçenekler için yükle
-    final allCategoryWords = await WordLoader.loadCategoryWords(widget.category);
+    final allCategoryWords = await WordLoader.loadCategoryWords(
+      widget.category,
+    );
 
     for (int i = 0; i < _words.length; i++) {
       final word = _words[i];
       final correctAnswer = word.word;
-      
+
       // aynı kategoriden farklı kelimeler al (doğru cevap hariç)
-      final otherWords = allCategoryWords
-          .where((w) => w.word != correctAnswer)
-          .toList();
+      final otherWords =
+          allCategoryWords.where((w) => w.word != correctAnswer).toList();
       otherWords.shuffle(random);
-      
+
       // 3 yanlış seçenek al
       final wrongOptions = otherWords.take(3).map((w) => w.word).toList();
-      
+
       // tüm seçenekleri karıştır
       final allOptions = <String>[correctAnswer, ...wrongOptions];
       allOptions.shuffle(random);
-      
+
       final correctIndex = allOptions.indexOf(correctAnswer);
-      
+
       // basit İngilizce cümle oluştur
       final sentence = _generateSentence(word);
-      
-      _questions.add(FillBlanksQuestion(
-        sentence: sentence,
-        correctAnswer: correctAnswer,
-        options: allOptions,
-        correctIndex: correctIndex,
-        word: word,
-      ));
+
+      _questions.add(
+        FillBlanksQuestion(
+          sentence: sentence,
+          correctAnswer: correctAnswer,
+          options: allOptions,
+          correctIndex: correctIndex,
+          word: word,
+        ),
+      );
     }
   }
 
@@ -145,19 +151,19 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
       "They want to _____ something new.",
       "The _____ is ready for use.",
     ];
-    
+
     final random = Random();
     return sentences[random.nextInt(sentences.length)];
   }
 
   void _selectAnswer(int index) {
     if (_isAnswered) return;
-    
+
     setState(() {
       _selectedAnswerIndex = index;
       _isAnswered = true;
       _showResult = true;
-      
+
       if (index == _questions[_currentQuestionIndex].correctIndex) {
         _correctAnswers++;
       }
@@ -179,31 +185,46 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
 
   void _finishQuiz() async {
     // quiz tamamlandı, sonuç ekranına git
-    int earnedXp = SessionService.calculateQuizXp('fill_blanks', _correctAnswers);
-    
+    int earnedXp = SessionService.calculateQuizXp(
+      'fill_blanks',
+      _correctAnswers,
+    );
+
     // XP'yi ekle
     await SessionService().addQuizXp('fill_blanks', _correctAnswers);
-    
-    Logger.i('Fill Blanks Quiz completed: $_correctAnswers/${_questions.length} correct, +$earnedXp XP', 'FillBlanksQuiz');
-    
+
+    Logger.i(
+      'Fill Blanks Quiz completed: $_correctAnswers/${_questions.length} correct, +$earnedXp XP',
+      'FillBlanksQuiz',
+    );
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => FillBlanksQuizResultScreen(
-            correctAnswers: _correctAnswers,
-            totalQuestions: _questions.length,
-            earnedXp: earnedXp,
-            category: widget.category,
-          ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
+        FeatureFlags.useSharedAxisVerticalForModals
+            ? sharedAxisRoute(
+                builder:
+                    (context) => FillBlanksQuizResultScreen(
+                      correctAnswers: _correctAnswers,
+                      totalQuestions: _questions.length,
+                      earnedXp: earnedXp,
+                      category: widget.category,
+                    ),
+                type: SharedAxisTransitionType.vertical,
+                duration: const Duration(milliseconds: 220),
+                reverseDuration: const Duration(milliseconds: 180),
+              )
+            : fadeThroughRoute(
+                builder:
+                    (context) => FillBlanksQuizResultScreen(
+                      correctAnswers: _correctAnswers,
+                      totalQuestions: _questions.length,
+                      earnedXp: earnedXp,
+                      category: widget.category,
+                    ),
+                duration: const Duration(milliseconds: 220),
+                reverseDuration: const Duration(milliseconds: 180),
+              ),
       );
     }
   }
@@ -223,9 +244,7 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
           color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      body: SafeArea(
-        child: _buildBody(),
-      ),
+      body: SafeArea(child: _buildBody()),
     );
   }
 
@@ -266,7 +285,9 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
               Text(
                 _errorMessage,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -302,7 +323,7 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
 
   Widget _buildQuizContent() {
     FillBlanksQuestion question = _questions[_currentQuestionIndex];
-    
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -314,7 +335,9 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
               Text(
                 'Soru ${_currentQuestionIndex + 1}/${_questions.length}',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
                 ),
               ),
               const Spacer(),
@@ -330,7 +353,8 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
           const SizedBox(height: 8),
           LinearProgressIndicator(
             value: (_currentQuestionIndex + 1) / _questions.length,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
             valueColor: AlwaysStoppedAnimation<Color>(
               Theme.of(context).colorScheme.primary,
             ),
@@ -352,7 +376,9 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
                 Text(
                   'Boşluğu doldurun:',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -368,7 +394,9 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
                 Text(
                   'Türkçe anlamı: ${question.word.tr}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.6),
                     fontStyle: FontStyle.italic,
                   ),
                   textAlign: TextAlign.center,
@@ -383,7 +411,11 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
             child: ListView.builder(
               itemCount: question.options.length,
               itemBuilder: (context, index) {
-                return _buildOptionCard(index, question.options[index], question.correctIndex);
+                return _buildOptionCard(
+                  index,
+                  question.options[index],
+                  question.correctIndex,
+                );
               },
             ),
           ),
@@ -402,7 +434,9 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
                 ),
               ),
               child: Text(
-                _currentQuestionIndex < _questions.length - 1 ? 'Sonraki Soru' : 'Sonuçları Gör',
+                _currentQuestionIndex < _questions.length - 1
+                    ? 'Sonraki Soru'
+                    : 'Sonuçları Gör',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -439,15 +473,18 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
         textColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
       }
     } else {
-      backgroundColor = isSelected 
-        ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-        : Theme.of(context).colorScheme.surfaceContainerHighest;
-      borderColor = isSelected 
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.outline.withOpacity(0.3);
-      textColor = isSelected 
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.onSurface;
+      backgroundColor =
+          isSelected
+              ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+              : Theme.of(context).colorScheme.surfaceContainerHighest;
+      borderColor =
+          isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.outline.withOpacity(0.3);
+      textColor =
+          isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.onSurface;
     }
 
     return Container(
@@ -462,7 +499,7 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
             decoration: BoxDecoration(
               color: backgroundColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor!, width: 2),
+              border: Border.all(color: borderColor, width: 2),
             ),
             child: Row(
               children: [
@@ -471,28 +508,43 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: showColors && isCorrect 
-                      ? Colors.green 
-                      : showColors && isSelected && !isCorrect
-                        ? Colors.red
-                        : isSelected 
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.transparent,
+                    color:
+                        showColors && isCorrect
+                            ? Colors.green
+                            : showColors && isSelected && !isCorrect
+                            ? Colors.red
+                            : isSelected
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
                     border: Border.all(
-                      color: showColors && isCorrect 
-                        ? Colors.green 
-                        : showColors && isSelected && !isCorrect
-                          ? Colors.red
-                          : Theme.of(context).colorScheme.outline,
+                      color:
+                          showColors && isCorrect
+                              ? Colors.green
+                              : showColors && isSelected && !isCorrect
+                              ? Colors.red
+                              : Theme.of(context).colorScheme.outline,
                     ),
                   ),
-                  child: showColors && isCorrect
-                    ? const Icon(Icons.check, color: Colors.white, size: 16)
-                    : showColors && isSelected && !isCorrect
-                      ? const Icon(Icons.close, color: Colors.white, size: 16)
-                      : isSelected
-                        ? Icon(Icons.circle, color: Theme.of(context).colorScheme.onPrimary, size: 12)
-                        : null,
+                  child:
+                      showColors && isCorrect
+                          ? const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 16,
+                          )
+                          : showColors && isSelected && !isCorrect
+                          ? const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 16,
+                          )
+                          : isSelected
+                          ? Icon(
+                            Icons.circle,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            size: 12,
+                          )
+                          : null,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -500,7 +552,8 @@ class _FillBlanksQuizScreenState extends State<FillBlanksQuizScreen> {
                     option,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: textColor,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
                 ),
@@ -576,9 +629,14 @@ class FillBlanksQuizResultScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(40),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          color:
+                              Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
                           border: Border.all(
-                            color: _getPerformanceColor(percentage).withOpacity(0.3),
+                            color: _getPerformanceColor(
+                              percentage,
+                            ).withOpacity(0.3),
                             width: 3,
                           ),
                         ),
@@ -592,7 +650,9 @@ class FillBlanksQuizResultScreen extends StatelessWidget {
                       // başlık
                       Text(
                         'Quiz Tamamlandı!',
-                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineLarge?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.bold,
                         ),
@@ -641,7 +701,9 @@ class FillBlanksQuizResultScreen extends StatelessWidget {
                       Text(
                         'Kategori: $category',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.5),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -680,7 +742,9 @@ class FillBlanksQuizResultScreen extends StatelessWidget {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => FillBlanksQuizScreen(category: category),
+                        builder:
+                            (context) =>
+                                FillBlanksQuizScreen(category: category),
                       ),
                     );
                   },
@@ -702,16 +766,19 @@ class FillBlanksQuizResultScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildResultCard(BuildContext context, String title, String value, Color color, IconData icon) {
+  Widget _buildResultCard(
+    BuildContext context,
+    String title,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-          width: 2,
-        ),
+        border: Border.all(color: color.withOpacity(0.2), width: 2),
       ),
       child: Row(
         children: [
@@ -731,7 +798,9 @@ class FillBlanksQuizResultScreen extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
                   ),
                 ),
                 const SizedBox(height: 4),

@@ -127,7 +127,6 @@ class _AddWordScreenState extends State<AddWordScreen> {
             session.currentUser!.uid,
           );
         } catch (firestoreError) {
-          print('⚠️ Firestore sync failed: $firestoreError');
           if (mounted) {
             showLexiflowToast(
               context,

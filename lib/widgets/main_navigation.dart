@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/word_service.dart';
 import '../services/user_service.dart';
 import '../services/ad_service.dart';
+import '../services/session_service.dart';
 import '../services/achievement_listener_service.dart';
+import '../services/app_lifecycle_service.dart';
+import '../providers/profile_stats_provider.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/favorites_screen.dart';
 import '../screens/quiz_center_screen.dart';
 import '../screens/profile_screen.dart';
 import 'bottom_nav_bar.dart';
 import '../screens/cards/cards_home_screen.dart';
+import '../utils/feature_flags.dart';
 
 class MainNavigation extends StatefulWidget {
   final WordService wordService;
@@ -32,6 +37,7 @@ class _MainNavigationState extends State<MainNavigation> {
   final AchievementListenerService _achievementListener =
       AchievementListenerService();
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
+  AppLifecycleService? _lifecycleService;
 
   @override
   void initState() {
@@ -44,7 +50,6 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
       const QuizCenterScreen(),
       const CardsHomeScreen(),
-      // TODO: Re-enable Leaderboard UI if needed later
       // Previously, the 4th tab routed to LeaderboardScreen.
       // 4. sekme: Favoriler
       FavoritesScreen(
@@ -57,12 +62,31 @@ class _MainNavigationState extends State<MainNavigation> {
     // Initialize achievement listener to show popups when achievements are unlocked
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _achievementListener.initialize(context);
+      _initializeLifecycleService();
     });
+  }
+
+  void _initializeLifecycleService() {
+    try {
+      final sessionService = context.read<SessionService>();
+      final profileStatsProvider = context.read<ProfileStatsProvider>();
+      
+      _lifecycleService = AppLifecycleService(
+        sessionService: sessionService,
+        profileStatsProvider: profileStatsProvider,
+      );
+      
+      _lifecycleService!.initialize();
+
+    } catch (e) {
+
+    }
   }
 
   @override
   void dispose() {
     _achievementListener.dispose();
+    _lifecycleService?.dispose();
     super.dispose();
   }
 
@@ -71,7 +95,8 @@ class _MainNavigationState extends State<MainNavigation> {
       _currentIndex = index;
     });
     // telemetri log
-    debugPrint('I/flutter: [NAV] Switched tab -> index=$_currentIndex');
+
+    // Don't request fresh load on tab switch - let AutomaticKeepAliveClientMixin handle it
   }
 
   @override
@@ -83,6 +108,8 @@ class _MainNavigationState extends State<MainNavigation> {
           children: [for (var i = 0; i < _pages.length; i++) _buildPage(i)],
         ),
       ),
+      // Wrap bottom navigation with SafeArea(bottom: true) and a small bottom padding
+      // to avoid overlap with Android gesture/nav bars without changing styling.
       bottomNavigationBar: CustomBottomNavBar(
         currentIndex: _currentIndex,
         onTap: _onItemTapped,
@@ -96,28 +123,8 @@ class _MainNavigationState extends State<MainNavigation> {
       offstage: !isActive,
       child: TickerMode(
         enabled: isActive,
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.05, 0),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          ),
-          // Use a ValueKey tied to the current index so AnimatedSwitcher
-          // animates when the active tab changes, while preserving state
-          // via PageStorage and keeping inactive tabs mounted.
-          child: KeyedSubtree(
-            key: ValueKey<int>(_currentIndex),
-            child: _pages[index],
-          ),
-        ),
+        // Remove AnimatedSwitcher to preserve widget state
+        child: _pages[index],
       ),
     );
   }

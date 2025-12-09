@@ -183,7 +183,6 @@ class _StatisticsScreenState extends State<StatisticsScreen>
       learnedWordsCount = session.learnedWordsCount;
       favoritesCount = session.favoritesCount;
     } catch (e) {
-      print('⚠️ StatisticsScreen: Error reading SessionService data: $e');
       // Varsayılan değerler yukarıda zaten ayarlandı
     }
 
@@ -433,16 +432,25 @@ class _StatisticsScreenState extends State<StatisticsScreen>
 
                 final activityData = snapshot.data!;
                 final now = DateTime.now();
+                
+                // Veriyi tarihe göre map'e dönüştür
+                final dataMap = <String, Map<String, dynamic>>{};
+                for (final activity in activityData) {
+                  final date = activity['date'] as String?;
+                  if (date != null) {
+                    dataMap[date] = activity;
+                  }
+                }
+                
+                // Son 7 gün için veri oluştur
                 final weekData = List.generate(7, (index) {
                   final date = now.subtract(Duration(days: 6 - index));
                   final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                   
-                  final dayActivity = activityData.firstWhere(
-                    (activity) => activity['date'] == dateKey,
-                    orElse: () => {'xpEarned': 0, 'learnedWordsCount': 0, 'quizzesCompleted': 0},
-                  );
+                  final dayActivity = dataMap[dateKey];
+                  final xp = (dayActivity?['xpEarned'] as num?)?.toDouble() ?? 0.0;
                   
-                  return (dayActivity['xpEarned'] as num?)?.toDouble() ?? 0.0;
+                  return xp;
                 });
 
                 final maxValue = weekData.isEmpty ? 0.0 : weekData.reduce((a, b) => a > b ? a : b);
@@ -1296,7 +1304,6 @@ class _StatisticsScreenState extends State<StatisticsScreen>
           'İstatistik paylaşımı başarısız. Lütfen tekrar deneyin.',
         );
       }
-      debugPrint('Statistics sharing error: $e');
     }
   }
 

@@ -35,18 +35,16 @@ List<Word> _parseAllWordsJson(String jsonString) {
     if (_allWords != null) return _allWords!;
     
     try {
-      debugPrint('📚 Loading words from 1kwords.json...');
-      
+
       final String jsonString = await rootBundle.loadString(
         'assets/words/1kwords.json',
       );
       // Parse off-main-thread to avoid blocking UI
       _allWords = await compute(_parseAllWordsJson, jsonString);
-      
-      debugPrint('✅ Loaded ${_allWords!.length} words from JSON');
+
       return _allWords!;
     } catch (e) {
-      debugPrint('❌ Error loading words from JSON: $e');
+
       return [];
     }
   }
@@ -56,6 +54,9 @@ List<Word> _parseAllWordsJson(String jsonString) {
     final now = DateTime.now().toUtc();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
+
+  /// Expose current date key for UI layers to stay in sync with backend.
+  String getCurrentDateKey() => _getTodayDateString();
   
   /// Get next reset time (midnight UTC)
   DateTime getNextResetTime() {
@@ -75,21 +76,25 @@ List<Word> _parseAllWordsJson(String jsonString) {
   Future<Map<String, dynamic>> getTodaysWords(String userId) async {
     try {
       final today = _getTodayDateString();
-      
-      debugPrint('📅 Getting daily words for $today');
-      
+
       // Check if daily words already exist for today
       final existingWords = await _getDailyWordsFromCache(userId, today);
       if (existingWords != null) {
-        debugPrint('✅ Found cached daily words: ${existingWords['dailyWords'].length} words');
-        return existingWords;
+        // Verify the cached date matches today
+        final cachedDate = existingWords['date'] as String?;
+        if (cachedDate != null && cachedDate == today) {
+
+          return existingWords;
+        } else {
+
+        }
       }
       
       // Generate new daily words
-      debugPrint('🆕 No daily words found, generating new set...');
+
       return await generateDailyWords(userId);
     } catch (e) {
-      debugPrint('❌ Error getting today\'s words: $e');
+
       rethrow;
     }
   }
@@ -98,30 +103,25 @@ List<Word> _parseAllWordsJson(String jsonString) {
   Future<Map<String, dynamic>> generateDailyWords(String userId) async {
     try {
       final today = _getTodayDateString();
-      debugPrint('🎲 Generating daily words for $userId on $today');
-      
+
       // 1. Load all words from JSON
       final allWords = await _loadAllWords();
       if (allWords.isEmpty) {
-        debugPrint('⚠️ No words available in JSON file');
+
         return _createEmptyDailyWords(today);
       }
       
       // 2. Get user's learned words
       final learnedWordIds = await _getLearnedWordIds(userId);
-      debugPrint('📖 User has learned ${learnedWordIds.length} words');
-      
+
       // 3. Filter out learned words
       final unlearnedWords = allWords.where(
         (word) => !learnedWordIds.contains(word.word.toLowerCase())
       ).toList();
-      
-      debugPrint('🔍 Found ${unlearnedWords.length} unlearned words');
-      
+
       // 4. Check if we have enough words
       if (unlearnedWords.length < dailyWordCount) {
-        debugPrint('🎉 User has learned most words! Only ${unlearnedWords.length} remaining');
-        
+
         if (unlearnedWords.isEmpty) {
           // User completed all words!
           return _createCompletedDailyWords(today);
@@ -138,14 +138,12 @@ List<Word> _parseAllWordsJson(String jsonString) {
         dailyWordCount,
         userId,
       );
-      
-      debugPrint('✅ Selected ${selectedWords.length} words for today');
-      
+
       // 6. Save daily selection
       return await _saveDailyWords(userId, today, selectedWords);
       
     } catch (e) {
-      debugPrint('❌ Error generating daily words: $e');
+
       rethrow;
     }
   }
@@ -176,7 +174,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
       return wordsToSelect.take(selectedCount).map((w) => w.word).toList();
       
     } catch (e) {
-      debugPrint('❌ Error selecting random words: $e');
+
       return [];
     }
   }
@@ -188,7 +186,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
       final learnedWords = await _learnedWordsService.getLearnedWords(userId);
       return learnedWords.map((word) => word.toLowerCase()).toSet();
     } catch (e) {
-      debugPrint('❌ Error getting learned words: $e');
+
       return <String>{};
     }
   }
@@ -212,7 +210,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
       
       return recentWords;
     } catch (e) {
-      debugPrint('❌ Error getting recently used words: $e');
+
       return <String>{};
     }
   }
@@ -248,7 +246,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
         'hasWatchedAd': false,
       };
     } catch (e) {
-      debugPrint('❌ Error saving daily words: $e');
+
       rethrow;
     }
   }
@@ -266,7 +264,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
       
       return null;
     } catch (e) {
-      debugPrint('❌ Error getting daily words from cache: $e');
+
       return null;
     }
   }
@@ -284,7 +282,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
       
       await box.put(key, cacheData);
     } catch (e) {
-      debugPrint('❌ Error saving daily words to cache: $e');
+
     }
   }
   
@@ -314,8 +312,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
   /// Generate bonus words after watching ad
   Future<List<String>> generateBonusWords(String userId) async {
     try {
-      debugPrint('🎁 Generating bonus words after ad...');
-      
+
       // Load all words
       final allWords = await _loadAllWords();
       if (allWords.isEmpty) return [];
@@ -341,7 +338,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
       }).toList();
       
       if (availableWords.isEmpty) {
-        debugPrint('⚠️ No available words for bonus');
+
         return [];
       }
       
@@ -351,12 +348,11 @@ List<Word> _parseAllWordsJson(String jsonString) {
       
       final bonusCount = bonusWordCount.clamp(0, availableWords.length);
       final bonusWords = availableWords.take(bonusCount).map((w) => w.word).toList();
-      
-      debugPrint('✅ Generated ${bonusWords.length} bonus words');
+
       return bonusWords;
       
     } catch (e) {
-      debugPrint('❌ Error generating bonus words: $e');
+
       return [];
     }
   }
@@ -383,7 +379,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
       }
       
     } catch (e) {
-      debugPrint('❌ Error marking word as completed: $e');
+
     }
   }
   
@@ -406,7 +402,7 @@ List<Word> _parseAllWordsJson(String jsonString) {
         'isCompleted': remainingWords == 0,
       };
     } catch (e) {
-      debugPrint('❌ Error getting learning statistics: $e');
+
       return {
         'totalWords': 0,
         'learnedWords': 0,
@@ -414,6 +410,42 @@ List<Word> _parseAllWordsJson(String jsonString) {
         'progressPercentage': 0.0,
         'isCompleted': false,
       };
+    }
+  }
+  
+  /// Get the first word from today's personal daily words for notifications
+  /// Returns null if no words available for today
+  Future<String?> getFirstDailyWordForNotification(String userId) async {
+    try {
+      final today = _getTodayDateString();
+
+      // Try cache first for better performance
+      final cachedWords = await _getDailyWordsFromCache(userId, today);
+      if (cachedWords != null) {
+        final dailyWords = List<String>.from(cachedWords['dailyWords'] ?? []);
+        if (dailyWords.isNotEmpty) {
+
+          return dailyWords[0];
+        }
+      }
+      
+      // Fallback to Firestore
+      final path = FirestoreSchema.getDailyWordsPath(userId, today);
+      final doc = await _firestore.doc(path).get();
+      
+      if (doc.exists) {
+        final data = doc.data();
+        final dailyWords = List<String>.from(data?['dailyWords'] ?? []);
+        if (dailyWords.isNotEmpty) {
+
+          return dailyWords[0];
+        }
+      }
+
+      return null; // No words for today
+    } catch (e) {
+
+      return null;
     }
   }
 }

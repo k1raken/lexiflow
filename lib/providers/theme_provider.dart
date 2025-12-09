@@ -33,32 +33,26 @@ class ThemeProvider extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print('Error loading theme preference: $e');
     }
   }
 
   /// Yeni tema modunu ayarla ve SharedPreferences'a kaydet
   Future<void> setThemeMode(ThemeMode mode) async {
     if (_themeMode == mode) {
-      print('🎨 Theme mode unchanged: ${_getThemeString(mode)}');
       return;
     }
 
     final oldMode = _themeMode;
     _themeMode = mode;
     
-    print('🎨 Theme changing: ${_getThemeString(oldMode)} → ${_getThemeString(mode)}');
     notifyListeners();
-    print('🔄 Theme listeners notified');
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final themeString = _getThemeString(mode);
       
       await prefs.setString(_themeKey, themeString);
-      print('✅ Theme saved: $themeString');
     } catch (e) {
-      print('❌ Error saving theme preference: $e');
     }
   }
 
@@ -80,7 +74,6 @@ class ThemeProvider extends ChangeNotifier {
     final newMode = _themeMode == ThemeMode.dark 
         ? ThemeMode.light 
         : ThemeMode.dark;
-    print('🔄 Toggle theme requested: ${_getThemeString(_themeMode)} → ${_getThemeString(newMode)}');
     await setThemeMode(newMode);
   }
 

@@ -1,154 +1,128 @@
-# ======================
-# 🌍 Genel Dosyalar
-# ======================
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+# --- Markdown Files ---
+*.md
+!README.md
 
-# ======================
-# 💻 IDE & Editor
-# ======================
-*.iml
-*.ipr
-*.iws
+# --- Environment Variables (Zero Tolerance) ---
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.staging
+*.env
+
+# --- Private Keys & Certificates ---
+*.pem
+*.key
+*.p12
+*.cer
+*.crt
+*.der
+*.pfx
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.keystore
+*.jks
+
+# --- Credentials & Secrets ---
+credentials.json
+serviceAccountKey.json
+**/secrets/
+**/credentials/
+**/keys/
+google-services.json
+GoogleService-Info.plist
+
+# --- Logs ---
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+firebase-debug.log
+firestore-debug.log
+
+# --- Database Files ---
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# --- OS Generated ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# --- IDE & Editors ---
 .idea/
 .vscode/
 *.code-workspace
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.trae/
 
-# ======================
-# 🐦 Flutter / Dart / Pub
-# ======================
+# --- Flutter / Dart ---
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
 build/
 coverage/
-.packages
-pubspec.lock
-**/doc/api/
-**/ios/Flutter/.last_build_id
 
-# ======================
-# 🤖 Android
-# ======================
-android/app/google-services.json
+# --- Android ---
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
 android/key.properties
-*.keystore
-*.jks
-/android/app/debug
-/android/app/profile
-/android/app/release
-android/app/google-services.json.bak
+android/keystore/
+local.properties
+*.apk
+*.aab
 
-# ======================
-# 🍎 iOS
-# ======================
-ios/Runner/GoogleService-Info.plist
-ios/Flutter/Flutter.podspec
+# --- iOS ---
 ios/Pods/
 ios/.symlinks/
 ios/Flutter/.last_build_id
+Podfile.lock
 *.xcuserstate
 *.xcworkspace
-*.xcuserdata/
+DerivedData/
 
-# ======================
-# 🔐 Secrets & Configs
-# ======================
-.env
-*.env
-*.keys
-*.pem
-*.crt
-*.p12
-*.der
-*.cfg
-*.config
-*.ini
-lib/firebase_options.dart
+# --- Firebase ---
 .firebaserc
-**/secrets/
-**/credentials/
-**/keys/
-credentials.json
-serviceAccountKey.json
-+lib/core/config.dart        
-+*.sqlite                    
-+hive_boxes/                
-+*.aab                   
-+*.apk
-
-
-# ======================
-# 🧪 Test / Emulator
-# ======================
-test/
-integration_test/
-*.spec.dart
-*.test.dart
-firebase-debug.log
-firestore-debug.log
+.firebase/
+firebase-debug.*
 emulator-data/
-local_emulator_cache/
 
-# ======================
-# 🧰 Local Scripts & Reports
-# ======================
-*.ps1
-*.sh
-*.bat
-*.md.bak
-fixlog.txt
-analyze_report*.txt
-imports.log
-relative_imports.log
-dead_code_report.txt
-CLEANUP_REPORT_OLD.md
-SECURITY_AUDIT_REPORT.md
+# --- Node ---
+node_modules/
+functions/node_modules/
 
-# ======================
-# 🌐 Platform Build (opsiyonel)
-# ======================
+# --- Build & Cache ---
+tmp/
+temp/
+cache/
+.cache/
+dist/
+out/
+
+# --- Platform Builds ---
 web/
 linux/
 macos/
 windows/
-
-# ======================
-# 🧠 Temporary / Cache
-# ======================
-tmp/
-temp/
-*.tmp
-*.bak
-*.old
-cache/
-.cache/
-logs/
-flutter_export_environment.sh
-
-# ======================
-# 🧩 Node / Firebase Tools (bazı sistemlerde)
-# ======================
-functions/node_modules/
-firebase-debug.log
-firebase-debug.*
-.firebase/
-
-# ======================
-# 🎨 Public Assets Exception
-# ======================
-!store_assets/banner.png
-!store_assets/playstore.png
-!store_assets/appstore.png

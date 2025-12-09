@@ -39,26 +39,26 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 500), // 700ms -> 500ms (daha hızlı)
     );
     _scaleAnimation = CurvedAnimation(
       parent: _animationController,
-      curve: Curves.elasticOut,
+      curve: Curves.easeOut, // elasticOut -> easeOut (daha performanslı)
     );
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeIn,
     );
     _confettiController = ConfettiController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 1500), // 2s -> 1.5s (daha hızlı)
     );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _animationController.forward();
-    });
+    // Animasyonları hemen başlat (postFrameCallback gereksiz)
+    _animationController.forward();
 
     if (widget.score == widget.totalQuestions || widget.leveledUp) {
-      Future.delayed(const Duration(milliseconds: 400), () {
+      // Gecikmeyi azalt
+      Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) _confettiController.play();
       });
     }
@@ -95,29 +95,27 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
     final incorrectAnswers = widget.totalQuestions - widget.score;
 
     return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Stack(
-                  children: [
-                    // Arka plan gradyanı - öğrenilen quiz için yeşil, diğerleri için varsayılan
-                    Container(
-                      height: constraints.maxHeight,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: isLearnedQuiz 
-                              ? [const Color(0xFF4ADE80), const Color(0xFF16A34A)] // Green gradient for learned quiz
-                              : [const Color(0xFF06D6A0), const Color(0xFF4ECDC4)], // Default gradient
-                        ),
-                      ),
-                    ),
-
-                    // Konfeti
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isLearnedQuiz 
+                ? [const Color(0xFF4ADE80), const Color(0xFF16A34A)] // Green gradient for learned quiz
+                : [const Color(0xFF06D6A0), const Color(0xFF4ECDC4)], // Default gradient
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Stack(
+                    children: [
+                      // Konfeti
                     Align(
                       alignment: Alignment.topCenter,
                       child: ConfettiWidget(
@@ -234,6 +232,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
             );
           },
         ),
+      ),
       ),
       persistentFooterButtons: [
         Padding(

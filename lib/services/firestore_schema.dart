@@ -3,11 +3,9 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-
 class FirestoreSchema {
 
   static const String publicWordsCollection = 'public_words';
-
 
   static Map<String, dynamic> createPublicWord({
     required String wordId,
@@ -46,7 +44,6 @@ class FirestoreSchema {
 
  
   static const String userWordProgressSubcollection = 'word_progress';
-
 
   static Map<String, dynamic> createUserWordProgress({
     required String wordId,
@@ -115,7 +112,6 @@ class FirestoreSchema {
   // ===========================================
   // DAILY WORDS COLLECTION
   // ===========================================
-
 
   static const String dailyWordsSubcollection = 'daily_words';
 
@@ -246,7 +242,6 @@ class FirestoreSchema {
   // HELPER METHODS
   // ===========================================
 
-
   static String _sanitizeDocumentId(String id) {
     if (id.isEmpty) {
       throw ArgumentError('Document ID cannot be empty');
@@ -314,56 +309,6 @@ class FirestoreSchema {
         'users/$safeUserId/$userDataCollection/$migrationStatusDocument';
     _validateDocumentPath(path);
     return path;
-  }
-
-  // ===========================================
-  // LEADERBOARD COLLECTION
-  // ===========================================
-
-  
-  static const String leaderboardStatsCollection = 'leaderboard_stats';
-
-  static Map<String, dynamic> createLeaderboardStats({
-    required String userId,
-    required String displayName,
-    String? photoURL,
-    int level = 1, // using standardized level field
-    int totalXp = 0,
-    int weeklyXp = 0,
-    int currentStreak = 0,
-    int longestStreak = 0,
-    int quizzesCompleted = 0,
-    int wordsLearned = 0,
-    int rank = 0,
-    int? previousRank,
-    DateTime? weekResetDate,
-  }) {
-    return {
-      'userId': userId,
-      'displayName': displayName,
-      'photoURL': photoURL,
-      'level': level, // using standardized level field
-      'totalXp': totalXp,
-      'weeklyXp': weeklyXp,
-      'currentStreak': currentStreak,
-      'longestStreak': longestStreak,
-      'quizzesCompleted': quizzesCompleted,
-      'wordsLearned': wordsLearned,
-      'rank': rank,
-      'previousRank': previousRank,
-      'weekResetDate':
-          weekResetDate != null
-              ? Timestamp.fromDate(weekResetDate)
-              : FieldValue.serverTimestamp(),
-      'lastUpdated': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    };
-  }
-
- 
-  static String getLeaderboardStatsPath(String userId) {
-    final safeUserId = _sanitizeDocumentId(userId);
-    return '$leaderboardStatsCollection/$safeUserId';
   }
 
   // ===========================================

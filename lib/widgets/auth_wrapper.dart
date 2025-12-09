@@ -11,6 +11,7 @@ import '../screens/sign_in_screen.dart';
 import '../screens/migration_screen.dart';
 import 'main_navigation.dart';
 import 'error_handler_widget.dart';
+import 'onboarding_wrapper.dart';
 
 class AuthWrapper extends StatefulWidget {
   final WordService wordService;
@@ -34,7 +35,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   bool _isCheckingMigration = true;
   bool _shouldShowMigration = false;
   bool _hasCheckedMigration = false;
-  
+
   static const String _migrationCacheKey = 'migration_check_completed';
 
   @override
@@ -55,18 +56,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Future<void> _checkMigrationStatus() async {
     if (_hasCheckedMigration) {
-      debugPrint('[AuthWrapper] Migration already cached -> skip');
+
       return;
     }
 
     try {
-      debugPrint('[AuthWrapper] Checking migration status...');
 
       final prefs = await SharedPreferences.getInstance();
       final isCached = prefs.getBool(_migrationCacheKey) ?? false;
 
       if (isCached) {
-        debugPrint('[AuthWrapper] Migration cached -> skip');
+
         if (mounted) {
           setState(() {
             _shouldShowMigration = false;
@@ -82,7 +82,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
           .timeout(
             const Duration(seconds: 2),
             onTimeout: () {
-              debugPrint('[AuthWrapper] Migration check timeout -> continue');
+
               return false;
             },
           );
@@ -100,12 +100,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
       });
 
       if (shouldShow) {
-        debugPrint('[AuthWrapper] Migration required -> showing migration screen');
+
       } else {
-        debugPrint('[AuthWrapper] Migration not needed -> continue');
+
       }
     } catch (e) {
-      debugPrint('[AuthWrapper] Migration check error: $e');
+
       if (!mounted) {
         return;
       }
@@ -115,7 +115,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         _isCheckingMigration = false;
         _hasCheckedMigration = true;
       });
-      debugPrint('[AuthWrapper] Error fallback -> continue to app');
+
     }
   }
 
@@ -128,7 +128,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
               'isInitialized=${sessionService.isInitialized}, '
               'isAuthenticated=${sessionService.isAuthenticated}, '
               'isCheckingMigration=$_isCheckingMigration';
-          debugPrint('[AuthWrapper] build -> ' + logDetails);
 
           // Always render a minimal scaffold immediately in loading state
           if (!sessionService.isInitialized || _isCheckingMigration) {
@@ -139,9 +138,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
           }
 
           if (sessionService.isAuthenticated) {
-            debugPrint(
-              '[AuthWrapper] Authenticated user -> shouldShowMigration=$_shouldShowMigration',
-            );
 
             WidgetsBinding.instance.addPostFrameCallback((_) {
               final syncProvider = context.read<SyncStatusProvider>();
@@ -154,23 +150,23 @@ class _AuthWrapperState extends State<AuthWrapper> {
             });
 
             if (_shouldShowMigration) {
-              debugPrint('[AuthWrapper] Presenting migration screen');
+
               return const MigrationScreen();
             }
 
-            debugPrint('[AuthWrapper] Launching main navigation');
-            return MainNavigation(
-              wordService: widget.wordService,
-              userService: widget.userService,
-              adService: widget.adService,
+            return OnboardingWrapper(
+              child: MainNavigation(
+                wordService: widget.wordService,
+                userService: widget.userService,
+                adService: widget.adService,
+              ),
             );
           }
 
-          debugPrint('[AuthWrapper] Presenting sign-in screen');
           return const SignInScreen();
         } catch (e, st) {
           // Visible error UI instead of propagating raw NotInitialized errors
-          debugPrint('[AuthWrapper] UI error: $e\n$st');
+
           return Scaffold(
             appBar: AppBar(title: const Text('LexiFlow')),
             body: Padding(
@@ -197,6 +193,4 @@ class _AuthWrapperState extends State<AuthWrapper> {
       },
     );
   }
-
-  }
-
+}

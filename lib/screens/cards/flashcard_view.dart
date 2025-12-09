@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/flashcard_models.dart';
 import '../../providers/cards_provider.dart';
-import '../../utils/lexiflow_colors.dart';
+import '../../utils/design_system.dart';
 
 class FlashcardView extends StatefulWidget {
   const FlashcardView({super.key, required this.set, required this.direction});

@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import '../services/word_service.dart';
 import '../services/user_service.dart';
 import '../services/quiz_generator.dart';
-import '../widgets/lexiflow_toast.dart';
 import '../utils/design_system.dart';
 import '../di/locator.dart';
+import '../services/ad_service.dart';
+import '../utils/feature_flags.dart';
 
 class QuizStartScreen extends StatefulWidget {
   final String? categoryKey;
@@ -39,6 +40,24 @@ class _QuizStartScreenState extends State<QuizStartScreen> {
         _errorMessage = null;
       });
 
+      // Enforce rewarded ad gate with cooldown before generating quiz
+      final adService = locator<AdService>();
+      final gateOk =
+          FeatureFlags.adsEnabled
+              ? await adService.enforceRewardedGateIfNeeded(
+                context: context,
+                chillMs: Duration(minutes: 20).inMilliseconds,
+                grantXpOnReward: true,
+              )
+              : true; // Reklamlar devre dışı ise doğrudan geç
+      if (!gateOk) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Reklam gösterilemedi, lütfen tekrar deneyin.';
+        });
+        return;
+      }
+
       final wordService = locator<WordService>();
       final userService = locator<UserService>();
 
@@ -51,12 +70,16 @@ class _QuizStartScreenState extends State<QuizStartScreen> {
       }
 
       // kategori kelimelerini yükle
-      final categoryWords = await wordService.getCategoryWords(widget.categoryKey!);
-      
+      final categoryWords = await wordService.getCategoryWords(
+        widget.categoryKey!,
+      );
+
       if (!QuizGenerator.canGenerateQuiz(categoryWords)) {
         setState(() {
           _isLoading = false;
-          _errorMessage = QuizGenerator.getInsufficientWordsMessage(categoryWords.length);
+          _errorMessage = QuizGenerator.getInsufficientWordsMessage(
+            categoryWords.length,
+          );
         });
         return;
       }
@@ -103,9 +126,7 @@ class _QuizStartScreenState extends State<QuizStartScreen> {
         foregroundColor: Colors.white,
       ),
       body: Center(
-        child: _isLoading
-            ? _buildLoadingWidget()
-            : _buildErrorWidget(),
+        child: _isLoading ? _buildLoadingWidget() : _buildErrorWidget(),
       ),
     );
   }
@@ -115,10 +136,7 @@ class _QuizStartScreenState extends State<QuizStartScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (widget.categoryIcon != null) ...[
-          Text(
-            widget.categoryIcon!,
-            style: const TextStyle(fontSize: 64),
-          ),
+          Text(widget.categoryIcon!, style: const TextStyle(fontSize: 64)),
           const SizedBox(height: 16),
         ],
         const CircularProgressIndicator(
@@ -127,9 +145,7 @@ class _QuizStartScreenState extends State<QuizStartScreen> {
         const SizedBox(height: 16),
         Text(
           '${widget.categoryName ?? 'Kategori'} quiz\'i hazırlanıyor...',
-          style: AppTextStyles.body1.copyWith(
-            color: AppColors.textSecondary,
-          ),
+          style: AppTextStyles.body1.copyWith(color: AppColors.textSecondary),
           textAlign: TextAlign.center,
         ),
       ],
@@ -143,31 +159,20 @@ class _QuizStartScreenState extends State<QuizStartScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (widget.categoryIcon != null) ...[
-            Text(
-              widget.categoryIcon!,
-              style: const TextStyle(fontSize: 64),
-            ),
+            Text(widget.categoryIcon!, style: const TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
           ],
-          Icon(
-            Icons.error_outline,
-            size: 64,
-            color: AppColors.error,
-          ),
+          Icon(Icons.error_outline, size: 64, color: AppColors.error),
           const SizedBox(height: 16),
           Text(
             'Quiz Başlatılamadı',
-            style: AppTextStyles.title1.copyWith(
-              color: AppColors.textPrimary,
-            ),
+            style: AppTextStyles.title1.copyWith(color: AppColors.textPrimary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             _errorMessage ?? 'Bilinmeyen bir hata oluştu',
-            style: AppTextStyles.body2.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),

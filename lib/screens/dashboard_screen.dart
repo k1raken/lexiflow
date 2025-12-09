@@ -9,24 +9,28 @@ import '../services/ad_service.dart';
 import '../services/session_service.dart';
 import '../services/daily_word_service.dart';
 import '../services/statistics_service.dart';
+import '../services/local_streak_tracker.dart';
 import '../utils/design_system.dart';
 import '../utils/app_icons.dart';
 import 'package:flutter/services.dart';
 import '../utils/feature_flags.dart';
-import '../widgets/offline_indicator.dart';
 import '../services/notification_service.dart';
 import 'word_detail_screen.dart';
 import 'statistics_screen.dart';
-// TODO: Re-enable Leaderboard UI if needed later
 // import 'leaderboard_screen.dart';
 import '../widgets/lexiflow_toast.dart';
 import 'daily_challenge_screen.dart';
 import '../providers/profile_stats_provider.dart';
+import '../utils/id_list_sanitizer.dart';
+import '../widgets/skeleton_loader.dart';
+import '../utils/streak_debug.dart';
+import '../widgets/countdown_widget.dart';
 
 class DashboardScreen extends StatefulWidget {
   final WordService wordService;
   final UserService userService;
   final AdService adService;
+  static final ValueNotifier<int> _refreshNotifier = ValueNotifier<int>(0);
 
   const DashboardScreen({
     super.key,
@@ -37,6 +41,10 @@ class DashboardScreen extends StatefulWidget {
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
+
+  static void requestFreshLoad() {
+    _refreshNotifier.value++;
+  }
 }
 
 // removed old pinned header delegate in favor of FAB coach UI
@@ -53,27 +61,18 @@ class _DashboardScreenState extends State<DashboardScreen>
   late final AdService _adService;
   late final SessionService _sessionService;
 
-  // Cache shared across potential re-creations of DashboardScreen
-  static List<Word>? _cachedDailyWords;
-  static DateTime? _cacheTimestamp;
-  static bool _initialLoadDone = false;
-
   List<Word> _dailyWords = [];
-  // Start in loading state ONLY if we don't have cached data yet
-  bool _isLoading = !_initialLoadDone;
-  bool _isFirstLoaded = false; // legacy latch; superseded by _initialLoadDone
-  final bool _isExtended = false;
-  List<String> _allWordIds = [];
+  bool _isLoading = false; // Start as false, only show skeleton on first load
+  bool _hasLoadedOnce = false;
+  bool _isFetchingDailyWords = false;
+  bool _hasExtraWords = false; // Track if user has unlocked extra words today
 
-  // Daily word system state
-  Map<String, dynamic>? _dailyWordsData;
-  Timer? _countdownTimer;
-  Duration _timeUntilReset = Duration.zero; // retained for legacy but not used for rebuilds
+  Timer? _midnightCheckTimer;
   DateTime? _lastBuildLog;
   bool _midnightTriggered = false;
-  static String? _cachedDate; // UTC date string for cached words (YYYY-MM-DD)
-  // Cache initial home load to avoid recreating futures on rebuilds
-  late Future<void> _homeFuture;
+  late int _lastExternalRefreshSignal;
+  late final VoidCallback _refreshListener;
+  String? _lastLoadedDate; // Track the date of last loaded words
 
   @override
   bool get wantKeepAlive => true;
@@ -88,21 +87,71 @@ class _DashboardScreenState extends State<DashboardScreen>
     _adService = widget.adService;
     _sessionService = Provider.of<SessionService>(context, listen: false);
 
-    // Eğer cache varsa anında göster ve arka planda sessizce yenile
-    if (_cachedDailyWords != null && _cachedDailyWords!.isNotEmpty) {
-      _dailyWords = _cachedDailyWords!;
-      _isLoading = false;
-      _isFirstLoaded = true;
-      _initialLoadDone = true;
-      // Sessiz arka plan yenileme (spinner yok)
-      _homeFuture = _loadDailyWords(silent: true);
-    } else {
-      // Verileri arka planda yükle ve geleceği (future) cache'le
-      // Böylece yeniden oluşturmalarda yeni future üretilmez
-      _homeFuture = _loadDailyWords();
+    _lastExternalRefreshSignal = DashboardScreen._refreshNotifier.value;
+    _refreshListener = () {
+      final signal = DashboardScreen._refreshNotifier.value;
+      if (signal != _lastExternalRefreshSignal && mounted) {
+        _lastExternalRefreshSignal = signal;
+        _checkAndLoadDailyWords();
+      }
+    };
+    DashboardScreen._refreshNotifier.addListener(_refreshListener);
+
+    // Only load on first init
+    if (!_hasLoadedOnce) {
+      // Show skeleton for first load
+      setState(() => _isLoading = true);
+      _checkAndLoadDailyWords();
     }
+    
+    // Record study session for streak tracking
+    Future.microtask(() async {
+      await LocalStreakTracker().recordStudySession();
+      // Cancel streak notification if user studied today
+      await NotificationService().cancelStreakNotificationIfStudied();
+    });
+    
     Future.microtask(_scheduleNotifications);
-    _startCountdownTimer();
+    _startMidnightCheckTimer();
+    
+    // Debug: Verify streak data and check increment
+    if (kDebugMode) {
+      Future.delayed(const Duration(seconds: 2), () async {
+        final userId = _sessionService.currentUser?.uid;
+        if (userId != null) {
+
+          await StreakDebug.verifyStreakData(userId);
+          await StreakDebug.checkStreakReset(userId);
+
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _midnightCheckTimer?.cancel();
+    DashboardScreen._refreshNotifier.removeListener(_refreshListener);
+    _dailyWordService.dispose();
+    super.dispose();
+  }
+
+  /// Check if we need to load new daily words based on date
+  Future<void> _checkAndLoadDailyWords() async {
+    final today = _dailyWordService.getCurrentDateKey();
+    
+    // If we haven't loaded yet or the date has changed, load new words
+    if (_lastLoadedDate == null || _lastLoadedDate != today) {
+
+      _lastLoadedDate = today;
+      
+      // Always load silently - skeleton is controlled separately
+      await _loadDailyWords(silent: true);
+    } else if (_dailyWords.isEmpty) {
+      // If words are empty but date is same, reload silently
+      await _loadDailyWords(silent: true);
+    }
+    // Else: Same day and words already loaded, do nothing (keep alive)
   }
 
   void _scheduleNotifications() async {
@@ -110,101 +159,118 @@ class _DashboardScreenState extends State<DashboardScreen>
       final userId = _sessionService.currentUser?.uid;
       await _notificationService.applySchedulesFromPrefs(userId: userId);
     } catch (e) {
-      debugPrint('Notification scheduling failed: $e');
+
     }
   }
 
   Future<void> _loadDailyWords({bool silent = false}) async {
-    if (!mounted) return;
-    // Yalnızca ilk yüklemede spinner göster; cache varsa sessizce yenile
-    if (!silent) {
-      setState(() {
-        _isLoading = !_initialLoadDone;
-      });
+    if (_isFetchingDailyWords) return;
+
+    _isFetchingDailyWords = true;
+
+    if (!mounted) {
+      _isFetchingDailyWords = false;
+      return;
     }
+
+    // Don't set _isLoading here - it's controlled by initState
+    // This prevents skeleton from showing on tab switches
 
     try {
       final user = _sessionService.currentUser;
-
+      List<Word> words = [];
       if (user == null) {
-        final words = await _wordService.getRandomWords(5);
-        setState(() {
-          _dailyWords = words;
-          if (!silent) _isLoading = false;
-          _isFirstLoaded = true; // mark as loaded
-          _initialLoadDone = true;
-        });
-        _cachedDailyWords = words;
-        _cacheTimestamp = DateTime.now();
-        _cachedDate = _todayDateUtcString();
-        return;
+        words = await _wordService.getRandomWords(DailyWordService.dailyWordCount);
+      } else {
+        final dailyWordsData = await _dailyWordService.getTodaysWords(user.uid);
+        
+        // Verify that the returned data is for today
+        final today = _dailyWordService.getCurrentDateKey();
+        final returnedDate = dailyWordsData['date'] as String?;
+        
+        if (returnedDate != null && returnedDate != today) {
+
+          // Force regenerate for today
+          final newDailyWordsData = await _dailyWordService.generateDailyWords(user.uid);
+          final sanitizedDailyWordIds = sanitizeIdList(
+            newDailyWordsData['dailyWords'],
+            context: 'dashboard/dailyWords/regenerated',
+          );
+          words = await _dailyWordService.getWordsByIds(sanitizedDailyWordIds);
+        } else {
+          // Load both daily words and extra words
+          final sanitizedDailyWordIds = sanitizeIdList(
+            dailyWordsData['dailyWords'],
+            context: 'dashboard/dailyWords',
+          );
+          final sanitizedExtraWordIds = sanitizeIdList(
+            dailyWordsData['extraWords'],
+            context: 'dashboard/extraWords',
+          );
+          
+          // Combine daily and extra words
+          final allWordIds = [...sanitizedDailyWordIds, ...sanitizedExtraWordIds];
+
+          words = await _dailyWordService.getWordsByIds(allWordIds);
+        }
+        
+        if (words.isEmpty) {
+
+          final fallback = await _wordService.getCategoryWords('general') ?? [];
+          words = fallback.take(10).toList();
+        }
       }
 
-      // AdService.initialize() kaldırıldı - gereksiz tekrar çağrı
+      if (!mounted) return;
 
-      // Use the requested format for daily words loading
-      final dailyWordsData = await _dailyWordService.getTodaysWords(user.uid);
-      _dailyWordsData = dailyWordsData;
-      final dailyWordIds = List<String>.from(
-        dailyWordsData['dailyWords'] ?? [],
-      );
-
-      // Get actual Word objects from IDs
-      var words = await _dailyWordService.getWordsByIds(dailyWordIds);
-      if (words.isEmpty) {
-        debugPrint('Daily words empty → fallback to general category');
-        final fallback = await _wordService.getCategoryWords('general') ?? [];
-        words = fallback.take(10).toList();
-      }
+      // Update last loaded date on successful load
+      _lastLoadedDate = _dailyWordService.getCurrentDateKey();
 
       setState(() {
         _dailyWords = words;
-        if (!silent) _isLoading = false;
-        _isFirstLoaded = true; // mark as loaded
-        _initialLoadDone = true;
+        // Update extra words flag if we have the info
+        if (user != null) {
+          _hasExtraWords = words.length > DailyWordService.dailyWordCount;
+
+        }
+        // Only update _isLoading on first load
+        if (!_hasLoadedOnce) {
+          _isLoading = false;
+        }
+        _hasLoadedOnce = true;
       });
-      _cachedDailyWords = words;
-      _cacheTimestamp = DateTime.now();
-      _cachedDate = (dailyWordsData['date'] ?? _todayDateUtcString()).toString();
     } catch (e) {
-      debugPrint('Error loading daily words: $e');
 
       try {
-        final words = await _wordService.getRandomWords(5);
-        // ek fallback: eğer random words da boşsa general kategorisinden yükle
+        var words = await _wordService.getRandomWords(DailyWordService.dailyWordCount);
         if (words.isEmpty) {
-          debugPrint('Random words also empty, trying general category');
-          final generalWords = await _wordService.getCategoryWords('general');
-          final fallbackWords = generalWords.take(10).toList();
-          setState(() {
-            _dailyWords = fallbackWords;
-            if (!silent) _isLoading = false;
-            _isFirstLoaded = true;
-            _initialLoadDone = true;
-          });
-          _cachedDailyWords = fallbackWords;
-          _cacheTimestamp = DateTime.now();
-          _cachedDate = _todayDateUtcString();
-          // shimmer kaldırıldı; yalnızca sessiz fallback
-        } else {
-          setState(() {
-            _dailyWords = words;
-            if (!silent) _isLoading = false;
-            _isFirstLoaded = true; // mark as loaded even on fallback
-            _initialLoadDone = true;
-          });
-          _cachedDailyWords = words;
-          _cacheTimestamp = DateTime.now();
-          _cachedDate = _todayDateUtcString();
+
+          final generalWords = await _wordService.getCategoryWords('general') ?? [];
+          words = generalWords.take(10).toList();
         }
-      } catch (fallbackError) {
-        debugPrint('Fallback error: $fallbackError');
+        if (!mounted) return;
         setState(() {
-          if (!silent) _isLoading = false;
-          _isFirstLoaded = true; // mark as loaded even on error
-          _initialLoadDone = true;
+          _dailyWords = words;
+          // Only update _isLoading on first load
+          if (!_hasLoadedOnce) {
+            _isLoading = false;
+          }
+          _hasLoadedOnce = true;
+        });
+      } catch (fallbackError) {
+
+        if (!mounted) return;
+        setState(() {
+          // Only update _isLoading on first load
+          if (!_hasLoadedOnce) {
+            _isLoading = false;
+          }
+          _hasLoadedOnce = true;
         });
       }
+    } finally {
+      _isFetchingDailyWords = false;
+      _midnightTriggered = false;
     }
   }
 
@@ -213,55 +279,139 @@ class _DashboardScreenState extends State<DashboardScreen>
     final userId = sessionService.currentUser?.uid;
 
     if (userId == null) {
-      _showSnackBar('Please sign in to unlock more words', Icons.error_outline);
+      _showSnackBar('Giriş yapmalısınız', Icons.error_outline);
       return;
     }
 
     try {
-      final success = await _dailyWordService.addExtraWordsAfterAd(userId);
 
-      if (success) {
-        await _loadDailyWords();
+      // Check if services are initialized
+      if (!mounted) {
 
-        final prevLevel = sessionService.level;
-        await sessionService.addXp(10);
-        final leveledUpResult = sessionService.level > prevLevel;
+        return;
+      }
+      
+      // Check if user already watched ad today
 
-        try {
-          await _statisticsService.recordActivity(
-            userId: userId,
-            xpEarned: 10,
-            learnedWordsCount: 5, // 5 new words unlocked
-            quizzesCompleted: 0,
-          );
-          debugPrint('✅ Activity recorded: 10 XP for unlocking words');
-        } catch (e) {
-          debugPrint('⚠️ Failed to record activity: $e');
+      final canWatch = await _dailyWordService.canWatchAdForExtraWords(userId);
+
+      if (!canWatch) {
+        _showSnackBar('Bugün zaten +5 kelime aldınız!', Icons.info_outline);
+        return;
+      }
+
+      // Ensure rewarded ad is ready
+      if (FeatureFlags.adsEnabled) {
+
+        if (!_adService.isRewardedReady) {
+          _showSnackBar('Reklam yükleniyor, lütfen birkaç saniye bekleyin...', Icons.info_outline);
+
+          try {
+            await _adService.preloadRewarded();
+
+            // Wait a bit for the ad to load
+            await Future.delayed(const Duration(seconds: 3));
+
+            if (!_adService.isRewardedReady) {
+              _showSnackBar('Reklam yüklenemedi, lütfen tekrar deneyin', Icons.error_outline);
+              return;
+            }
+          } catch (e, stackTrace) {
+
+            // In debug mode, allow skipping ad if it fails to load
+            if (kDebugMode) {
+
+              _showSnackBar('Debug: Reklam atlandı, kelimeler ekleniyor...', Icons.info_outline);
+              // Continue to generate words without watching ad
+            } else {
+              _showSnackBar('Reklam yüklenemedi', Icons.error_outline);
+              return;
+            }
+          }
         }
+      }
 
-        if (leveledUpResult) {
-          _showLevelUpDialog(sessionService.level);
-        } else {
-          _showSnackBar(
-            '🎉 +5 new words unlocked! +10 XP',
-            Icons.celebration,
-            color: Colors.green,
-          );
+      // Show ad and get extra words
+
+      bool adWatched = false;
+      
+      if (FeatureFlags.adsEnabled && _adService.isRewardedReady) {
+        try {
+          adWatched = await _adService.showRewardedAd();
+
+        } catch (e) {
+
+          if (kDebugMode) {
+
+            adWatched = true; // In debug, treat error as success
+          } else {
+            _showSnackBar('Reklam gösterilemedi', Icons.error_outline);
+            return;
+          }
         }
       } else {
-        _showSnackBar('Ad not ready. Please try again.', Icons.error_outline);
-      }
-    } catch (e) {
-      debugPrint('❌ Error loading more words: $e');
-      _showSnackBar('Failed to load more words', Icons.error_outline);
-    }
-  }
+        // Ads disabled or not ready - in debug mode, allow anyway
+        if (kDebugMode) {
 
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
-    _dailyWordService.dispose();
-    super.dispose();
+          adWatched = true;
+        }
+      }
+
+      if (!adWatched) {
+
+        _showSnackBar('Reklam izlenmedi', Icons.error_outline);
+        return;
+      }
+
+      // Generate 5 random extra words
+      final extraWordIds = await _dailyWordService.generateExtraWords(userId);
+      
+      if (extraWordIds.isEmpty) {
+        _showSnackBar('Ekstra kelime oluşturulamadı', Icons.error_outline);
+        return;
+      }
+
+      // Reload daily words (now includes extra words)
+      // _hasExtraWords will be automatically set in _loadDailyWords based on word count
+      await _loadDailyWords(silent: false);
+
+      // Award XP
+      final prevLevel = sessionService.level;
+      await sessionService.addXp(10);
+      final leveledUpResult = sessionService.level > prevLevel;
+
+      try {
+        await _statisticsService.recordActivity(
+          userId: userId,
+          xpEarned: 10,
+          learnedWordsCount: 5,
+          quizzesCompleted: 0,
+        );
+
+      } catch (e) {
+
+      }
+
+      if (leveledUpResult) {
+        _showLevelUpDialog(sessionService.level);
+      } else {
+        _showSnackBar(
+          '🎉 +${extraWordIds.length} kelime eklendi! +10 XP',
+          Icons.celebration,
+          color: Colors.green,
+        );
+      }
+    } catch (e, stackTrace) {
+
+      String errorMessage = 'Bir hata oluştu';
+      if (e.toString().contains('NotInitializedError')) {
+        errorMessage = 'Servisler henüz hazır değil, lütfen birkaç saniye bekleyin';
+      } else if (e.toString().contains('permission')) {
+        errorMessage = 'Reklam izleme izni gerekli';
+      }
+      
+      _showSnackBar(errorMessage, Icons.error_outline);
+    }
   }
 
   Future<void> _maybeScheduleDailyReminder() async {
@@ -283,33 +433,23 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  void _startCountdownTimer() {
-    _updateTimeUntilReset();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _updateTimeUntilReset();
-      // When the reset time hits 00:00 UTC, refresh daily words silently
+  void _startMidnightCheckTimer() {
+    // Check every 10 seconds for midnight
+    _midnightCheckTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       final remaining = _dailyWordService.getTimeUntilReset();
       if (remaining.inSeconds <= 0 && !_midnightTriggered) {
         _midnightTriggered = true;
-        // Clear cache and fetch new set silently
+
+        // Reset for new day
+        _lastLoadedDate = null;
+        _hasExtraWords = false;
         Future.microtask(() async {
-          await _loadDailyWords(silent: true);
-          // Update date cache after refresh
-          _cachedDate = _todayDateUtcString();
+          await _checkAndLoadDailyWords();
         });
+      } else if (remaining.inSeconds > 0) {
+        _midnightTriggered = false;
       }
     });
-  }
-
-  void _updateTimeUntilReset() {
-    // Ekranı her saniye yeniden çizmemek için setState kaldırıldı.
-    // Geri sayım artık StreamBuilder ile izole şekilde güncelleniyor.
-    _timeUntilReset = _dailyWordService.getTimeUntilReset();
-  }
-
-  String _todayDateUtcString() {
-    final now = DateTime.now().toUtc();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
   void _showSnackBar(String message, IconData icon, {Color? color}) {
@@ -412,12 +552,39 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  String _getGreetingMessage() {
+  /// Returns time-based Turkish greeting with title and subtitle
+  Map<String, String> _getGreetingData() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Günaydın!';
-    if (hour < 17) return 'İyi Öğleden Sonralar!';
-    if (hour < 21) return 'İyi Akşamlar!';
-    return 'İyi Geceler!';
+    
+    // Morning (06:00 - 11:59)
+    if (hour >= 6 && hour < 12) {
+      return {
+        'title': 'Günaydın! ☀️',
+        'subtitle': 'Güne zinde başlamak için birkaç kelime öğrenelim.',
+      };
+    }
+    
+    // Afternoon (12:00 - 17:59)
+    if (hour >= 12 && hour < 18) {
+      return {
+        'title': 'Tünaydın! 👋',
+        'subtitle': 'Kahve molasında kısa bir pratik yapmaya ne dersin?',
+      };
+    }
+    
+    // Evening (18:00 - 22:59)
+    if (hour >= 18 && hour < 23) {
+      return {
+        'title': 'İyi Akşamlar! 🌙',
+        'subtitle': 'Günü verimli bitir, hedeflerini tamamla.',
+      };
+    }
+    
+    // Night (23:00 - 05:59)
+    return {
+      'title': 'Selam Gece Kuşu! 🦉',
+      'subtitle': 'Uyumadan önce son bir tekrar harika olur.',
+    };
   }
 
   @override
@@ -426,24 +593,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     // Build loglarını azaltmak için basit throttle
     final now = DateTime.now();
-    if (kDebugMode && (_lastBuildLog == null ||
-        now.difference(_lastBuildLog!) > const Duration(seconds: 3))) {
-      debugPrint(
-        '[DashboardScreen] build -> isLoading=$_isLoading dailyWords=${_dailyWords.length}',
-      );
+    if (kDebugMode &&
+        (_lastBuildLog == null ||
+            now.difference(_lastBuildLog!) > const Duration(seconds: 3))) {
+
       _lastBuildLog = now;
     }
 
-    // Revisited Home tab: show cached content immediately and refresh in background
-    if (_initialLoadDone && !_isLoading) {
-      final shouldRefreshSilently =
-          _cacheTimestamp == null ||
-          now.difference(_cacheTimestamp!) > const Duration(seconds: 10);
-      if (shouldRefreshSilently) {
-        Future.microtask(() => _loadDailyWords(silent: true));
-      }
-    }
-    
     // Ana içerik: veriler hazırsa göster, değilse boş
     final Widget content = RefreshIndicator(
       onRefresh: _loadDailyWords,
@@ -456,39 +612,51 @@ class _DashboardScreenState extends State<DashboardScreen>
 
           // Modern Word Cards Grid
           SliverPadding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
+              vertical: AppSpacing.lg,
+            ),
             sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                if (index < _dailyWords.length) {
-                  return _buildModernWordCard(
-                    _dailyWords[index],
-                    index,
-                    isDark,
-                  );
-                } else if (!_isExtended) {
-                  return _buildModernMoreWordsCard(isDark);
-                }
-                return const SizedBox.shrink();
-              }, childCount: _dailyWords.length + (!_isExtended ? 1 : 0)),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  // Show word cards
+                  if (index < _dailyWords.length) {
+                    return _buildModernWordCard(
+                      _dailyWords[index],
+                      index,
+                      isDark,
+                    );
+                  }
+                  // Show "Get More Words" card at the end if applicable
+                  if (index == _dailyWords.length && !_hasExtraWords) {
+                    return _buildModernMoreWordsCard(isDark);
+                  }
+                  return const SizedBox.shrink();
+                },
+                childCount: _dailyWords.length + (_hasExtraWords ? 0 : 1),
+              ),
             ),
           ),
         ],
       ),
     );
 
-    const loadingState = Center(child: CircularProgressIndicator.adaptive());
+    // Skeleton loader for better UX
+    const loadingState = DashboardSkeleton();
 
-    // Shimmer kaldırıldı; bunun yerine yumuşak fade-in geçişi
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 150),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
-          child: child,
-        ),
-        // Yalnızca ilk açılışta loading göster; cache varsa anında içerik
-        child: (!_initialLoadDone && _isLoading) ? loadingState : content,
+        duration: const Duration(milliseconds: 300),
+        transitionBuilder:
+            (child, animation) => FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeInOut,
+              ),
+              child: child,
+            ),
+        child: (_isLoading && !_hasLoadedOnce) ? loadingState : content,
       ),
     );
   }
@@ -516,18 +684,16 @@ class _DashboardScreenState extends State<DashboardScreen>
           bottomRight: Radius.circular(24),
         ),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            AppSpacing.xl,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.screenPadding,
+          AppSpacing.lg,
+          AppSpacing.screenPadding,
+          AppSpacing.xl,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               // App Title with Streak
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -593,14 +759,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   style: TextStyle(fontSize: 20),
                                 ),
                                 const SizedBox(width: AppSpacing.sm),
-                                Consumer<ProfileStatsProvider>(
-                                  builder: (
-                                    context,
-                                    profileStatsProvider,
-                                    child,
-                                  ) {
-                                    final streak =
-                                        profileStatsProvider.currentStreak;
+                                Selector<ProfileStatsProvider, int>(
+                                  selector: (_, provider) => provider.currentStreak,
+                                  builder: (context, streak, _) {
                                     return Text(
                                       '$streak',
                                       style: AppTextStyles.title3.copyWith(
@@ -633,7 +794,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                             },
                           ),
                           const SizedBox(width: AppSpacing.sm),
-                          // TODO: Re-enable Leaderboard UI if needed later
                           // Leaderboard Button (hidden)
                           // decoratedIconButton(
                           //   icon: const Icon(
@@ -661,32 +821,37 @@ class _DashboardScreenState extends State<DashboardScreen>
               const SizedBox(height: AppSpacing.md),
 
               // Greeting Section
-              Padding(
-                padding: const EdgeInsets.only(top: 16, bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _getGreetingMessage(),
-                      style: AppTextStyles.headline3.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Inter',
-                      ),
+              Builder(
+                builder: (context) {
+                  final greetingData = _getGreetingData();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 16, bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          greetingData['title']!,
+                          style: AppTextStyles.headline3.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          greetingData['subtitle']!,
+                          style: AppTextStyles.body1.copyWith(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Hazır mısın öğrenmeye?',
-                      style: AppTextStyles.body1.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withOpacity(0.7),
-                        fontWeight: FontWeight.w500,
-                        fontFamily: 'Inter',
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(height: AppSpacing.lg),
 
@@ -719,10 +884,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                 child: Row(
                   children: [
                     Expanded(
-                      child: Consumer<ProfileStatsProvider>(
-                        builder: (context, profileProvider, _) {
-                          final learnedCount =
-                              profileProvider.learnedCount ?? 0;
+                      child: Selector<ProfileStatsProvider, int>(
+                        selector: (_, provider) => provider.learnedCount,
+                        builder: (context, learnedCount, _) {
                           return _buildModernStatItem(
                             Icons.school,
                             '$learnedCount',
@@ -737,9 +901,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                       color: Colors.white.withOpacity(0.3),
                     ),
                     Expanded(
-                      child: Consumer<SessionService>(
-                        builder: (context, sessionService, _) {
-                          final favCount = sessionService.favoritesCount;
+                      child: Selector<SessionService, int>(
+                        selector: (_, service) => service.favoritesCount,
+                        builder: (context, favCount, _) {
                           return _buildModernStatItem(
                             Icons.favorite_rounded,
                             '$favCount',
@@ -752,12 +916,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
             ],
-          ),
         ),
       ),
     );
   }
 
+  /*
   Widget _buildCoachFab(BuildContext context) {
     final due = widget.wordService.getDueReviewCount();
     final theme = Theme.of(context);
@@ -793,7 +957,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
     );
   }
+  */
 
+  /*
   Future<void> _showCoachSheet(BuildContext context, int due) async {
     final theme = Theme.of(context);
     await showModalBottomSheet(
@@ -804,149 +970,149 @@ class _DashboardScreenState extends State<DashboardScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      AppIcons.sparkles,
-                      color: theme.colorScheme.primary,
-                      size: 24,
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      'Günlük Koç',
-                      style: AppTextStyles.title2.copyWith(
-                        color: theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  due > 0
-                      ? 'Bugün $due kart hazır. Kısa bir tekrar öneriyoruz.'
-                      : 'Yeni kelimeler seni bekliyor. Başlayalım mı?',
-                  style: AppTextStyles.body2.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.8),
+        return Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    AppIcons.sparkles,
+                    color: theme.colorScheme.primary,
+                    size: 24,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                // What it does (explanatory bullets)
-                Row(
-                  children: [
-                    Icon(
-                      AppIcons.zap,
-                      size: 18,
-                      color: theme.colorScheme.secondary.withOpacity(0.9),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'Günlük Koç',
+                    style: AppTextStyles.title2.copyWith(
+                      color: theme.colorScheme.onSurface,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: Text(
-                        'Doğru aralıklarla tekrar planlar (FSRS).',
-                        style: AppTextStyles.body3.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.8),
-                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                due > 0
+                    ? 'Bugün $due kart hazır. Kısa bir tekrar öneriyoruz.'
+                    : 'Yeni kelimeler seni bekliyor. Başlayalım mı?',
+                style: AppTextStyles.body2.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.8),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              // What it does (explanatory bullets)
+              Row(
+                children: [
+                  Icon(
+                    AppIcons.zap,
+                    size: 18,
+                    color: theme.colorScheme.secondary.withOpacity(0.9),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'Doğru aralıklarla tekrar planlar (FSRS).',
+                      style: AppTextStyles.body3.copyWith(
+                        color: theme.colorScheme.onSurface.withOpacity(0.8),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      AppIcons.clock,
-                      size: 18,
-                      color: theme.colorScheme.secondary.withOpacity(0.9),
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: Text(
-                        'Günlük hedefini tek akışta tamamlarsın.',
-                        style: AppTextStyles.body3.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.8),
-                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    AppIcons.clock,
+                    size: 18,
+                    color: theme.colorScheme.secondary.withOpacity(0.9),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'Günlük hedefini tek akışta tamamlarsın.',
+                      style: AppTextStyles.body3.copyWith(
+                        color: theme.colorScheme.onSurface.withOpacity(0.8),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      AppIcons.brain,
-                      size: 18,
-                      color: theme.colorScheme.secondary.withOpacity(0.9),
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: Text(
-                        'Cevap kalitesine göre kişiselleştirir (Zordu/İyiydi/Çok kolay).',
-                        style: AppTextStyles.body3.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.8),
-                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    AppIcons.brain,
+                    size: 18,
+                    color: theme.colorScheme.secondary.withOpacity(0.9),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'Cevap kalitesine göre kişiselleştirir (Zordu/İyiydi/Çok kolay).',
+                      style: AppTextStyles.body3.copyWith(
+                        color: theme.colorScheme.onSurface.withOpacity(0.8),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          try {
-                            HapticFeedback.mediumImpact();
-                          } catch (_) {}
-                          Navigator.pop(ctx);
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder:
-                                  (_) => DailyChallengeScreen(
-                                    wordService: widget.wordService,
-                                    userService: widget.userService,
-                                    adService: widget.adService,
-                                  ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(AppIcons.play),
-                        label: const FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            'Devam Et',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            softWrap: false,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        try {
+                          HapticFeedback.mediumImpact();
+                        } catch (_) {}
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder:
+                                (_) => DailyChallengeScreen(
+                                  wordService: widget.wordService,
+                                  userService: widget.userService,
+                                  adService: widget.adService,
+                                ),
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.secondary,
-                          foregroundColor: theme.colorScheme.onSecondary,
+                        );
+                      },
+                      icon: const Icon(AppIcons.play),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Devam Et',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
                         ),
                       ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.secondary,
+                        foregroundColor: theme.colorScheme.onSecondary,
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Kapat'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Kapat'),
+                  ),
+                ],
+              ),
+            ],
           ),
         );
       },
     );
   }
+  */
 
+  /*
   Widget _buildDailyCoachCard(BuildContext context) {
     final dueCount = widget.wordService.getDueReviewCount();
     final theme = Theme.of(context);
@@ -1021,6 +1187,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
     );
   }
+  */
 
   // Modern Stat Item
   Widget _buildModernStatItem(IconData icon, String value, String label) {
@@ -1205,11 +1372,18 @@ class _DashboardScreenState extends State<DashboardScreen>
                   children: [
                     const Text('🇹🇷', style: TextStyle(fontSize: 16)),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      word.tr,
-                      style: AppTextStyles.body2.copyWith(
-                        color: Theme.of(context).colorScheme.secondary,
-                        fontWeight: FontWeight.w600,
+                    Flexible(
+                      fit: FlexFit.loose,
+                      child: Text(
+                        word.tr,
+                        style: AppTextStyles.body2.copyWith(
+                          color: Theme.of(context).colorScheme.secondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        softWrap: true,
+                        overflow: TextOverflow.visible,
+                        maxLines: 2,
+                        textScaleFactor: 1.0,
                       ),
                     ),
                   ],
@@ -1319,7 +1493,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            '+5 More Words',
+            '+5 Kelime Daha',
             style: AppTextStyles.title1.copyWith(
               color: Theme.of(context).colorScheme.primary,
               fontWeight: FontWeight.bold,
@@ -1327,7 +1501,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Watch a quick ad to unlock',
+            'Reklam izle, 5 kelime daha gör',
             style: AppTextStyles.body2.copyWith(
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
             ),
@@ -1339,48 +1513,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Countdown Timer Widget (small and subtle)
   Widget _buildCountdownTimer() {
-    // Her saniye yalnızca sayaç satırını güncelleyen hafif bir akış.
-    return StreamBuilder<int>(
-      stream: Stream.periodic(const Duration(seconds: 1), (i) => i),
-      builder: (context, snapshot) {
-        final duration = _dailyWordService.getTimeUntilReset();
-        final hours = duration.inHours;
-        final minutes = duration.inMinutes % 60;
-        final seconds = duration.inSeconds % 60;
-
-        return Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
-            borderRadius: AppBorderRadius.medium,
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.timer_outlined,
-                size: 16,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                'Yenilenme: ${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-                style: AppTextStyles.caption.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    // Widget now handles theme-aware colors internally
+    return const CountdownWidget();
   }
 }
+

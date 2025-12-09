@@ -128,7 +128,7 @@ class SyncManager {
     _isOnline = isOnline;
     
     if (!wasOnline && _isOnline) {
-      Logger.i('🌐 Device is back online, starting sync', 'SyncManager');
+      Logger.i('Device is back online, starting sync', 'SyncManager');
       _startSync();
     } else if (wasOnline && !_isOnline) {
       Logger.i('📴 Device is offline, pausing sync', 'SyncManager');
@@ -186,7 +186,7 @@ class SyncManager {
 
   /// Force a sync attempt - useful for manual retry
   void forceSyncAttempt() {
-    Logger.i('🔄 Manual sync attempt triggered', 'SyncManager');
+    Logger.i('Manual sync attempt triggered', 'SyncManager');
     
     // Check connectivity first
     Connectivity().checkConnectivity().then((result) {
@@ -381,9 +381,11 @@ class SyncManager {
   /// Dispose resources
   void dispose() {
     _syncTimer?.cancel();
+    _debounceTimer?.cancel();
     _connectivitySubscription?.cancel();
     _pendingOperationsController.close();
     _syncStatusController.close();
+    _syncStatusStreamController.close();
     Logger.i('SyncManager disposed', 'SyncManager');
   }
 }

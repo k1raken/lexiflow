@@ -18,24 +18,30 @@ import 'learned_quiz_screen.dart';
 
 String _buildWordHeroTag(Word word) {
   final normalized = word.word.trim();
+  // Append a unique identifier to prevent collisions in lists
+  // Note: This disables the Hero animation for this specific tag logic, 
+  // but prevents the app from crashing due to duplicate tags.
+  // If animation is needed, we need a more complex unique ID strategy (e.g. passing index).
+  final uniqueId = UniqueKey().toString();
+  
   if (normalized.isNotEmpty) {
-    return 'word_$normalized';
+    return 'word_${normalized}_$uniqueId';
   }
 
   final hiveKey = word.key;
   if (hiveKey != null) {
     final keyString = hiveKey.toString().trim();
     if (keyString.isNotEmpty) {
-      return 'word_$keyString';
+      return 'word_${keyString}_$uniqueId';
     }
   }
 
   final createdAt = word.createdAt;
   if (createdAt != null) {
-    return 'word_unknown_${createdAt.millisecondsSinceEpoch}';
+    return 'word_unknown_${createdAt.millisecondsSinceEpoch}_$uniqueId';
   }
 
-  return 'word_${word.hashCode}';
+  return 'word_${word.hashCode}_$uniqueId';
 }
 
 class FavoritesScreen extends StatefulWidget {
@@ -224,9 +230,11 @@ class _LearnedWordCardState extends State<_LearnedWordCard>
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
+                            // Allow vertical growth and adaptive height; prevent tight constraints
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   // Unique Hero tag to avoid collisions even if word is empty
                                   Hero(
@@ -245,16 +253,23 @@ class _LearnedWordCardState extends State<_LearnedWordCard>
                                   ),
                                   const SizedBox(height: 4),
                                   if (widget.word.tr.isNotEmpty) ...[
-                                    Text(
-                                      widget.word.tr,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodyMedium?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withOpacity(0.7),
-                                        fontWeight: FontWeight.w500,
+                                    Flexible(
+                                      fit: FlexFit.loose,
+                                      child: Text(
+                                        widget.word.tr,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodyMedium?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withOpacity(0.7),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        softWrap: true,
+                                        overflow: TextOverflow.visible,
+                                        maxLines: 2,
+                                        textScaleFactor: 1.0,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
@@ -1138,8 +1153,9 @@ class _LearnedWordsListState extends State<_LearnedWordsList>
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         initialItemCount: _filteredWords.length,
                         itemBuilder: (context, index, animation) {
-                          if (index >= _filteredWords.length)
+                          if (index >= _filteredWords.length) {
                             return const SizedBox.shrink();
+                          }
                           final word = _filteredWords[index];
                           return _buildWordCard(word, uid, animation);
                         },

@@ -8,12 +8,11 @@ import 'sync_manager.dart';
 import 'offline_storage_manager.dart';
 import 'offline_auth_service.dart';
 import 'user_service.dart';
-import 'leaderboard_service.dart';
-import 'weekly_xp_service.dart';
 import 'level_service.dart';
 import '../providers/profile_stats_provider.dart';
 import '../di/locator.dart';
 import 'learned_words_service.dart';
+import '../repositories/auth_repository.dart';
 
 /// Kullanıcı oturum durumunu ve verilerini yöneten servis
 class SessionService extends ChangeNotifier {
@@ -23,7 +22,9 @@ class SessionService extends ChangeNotifier {
   SessionService._internal();
 
   // Firebase örnekleri
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Repository
+  late final IAuthRepository _authRepository;
+  // Keep _firestore for complex transactions not yet moved to repo
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Servis örnekleri
@@ -47,7 +48,6 @@ class SessionService extends ChangeNotifier {
 
   // Gerçek zamanlı dinleyiciler
   StreamSubscription<DocumentSnapshot>? _userDataSubscription;
-  StreamSubscription<QuerySnapshot>? _leaderboardStatsSubscription;
 
   // aşırı rebuild'leri önlemek için notifyListeners debouncing
   Timer? _notifyDebounceTimer;
@@ -134,6 +134,10 @@ class SessionService extends ChangeNotifier {
     );
     try {
       _isLoading = true;
+      
+      // Initialize repository
+      _authRepository = locator<IAuthRepository>();
+      
       notifyListeners();
 
       // PHASE 1: Critical initialization - user auth and basic data
@@ -142,10 +146,9 @@ class SessionService extends ChangeNotifier {
       // Mark core as ready for UI
       _isCoreReady = true;
       _coreReadyController.add(true);
-      debugPrint(
         'I/flutter: [SESSION] coreReady=true (non-critical continue in bg)',
       );
-      Logger.i('🚀 Core services ready - UI can proceed', 'SessionService');
+      Logger.i('Core services ready - UI can proceed', 'SessionService');
 
       // PHASE 2: Non-critical initialization - can happen in background
       _initializeNonCriticalServices();
@@ -172,10 +175,10 @@ class SessionService extends ChangeNotifier {
 
   /// Phase 1: Critical services that must complete before UI can proceed
   Future<void> _initializeCriticalServices() async {
-    Logger.i('🔄 Initializing critical services...', 'SessionService');
+    Logger.i('Initializing critical services...', 'SessionService');
 
     // İlk olarak Firebase auth durumunu kontrol et
-    _user = _auth.currentUser;
+    _user = _authRepository.currentUser;
 
     if (_user != null) {
       // Firebase kullanıcısı mevcut - Firebase modunu kullan
@@ -193,7 +196,6 @@ class SessionService extends ChangeNotifier {
         final learnedWordsService = locator<LearnedWordsService>();
         await learnedWordsService.cleanupInvalidLearnedWords(_user!.uid);
         if (kDebugMode) {
-          debugPrint(
             'I/flutter: [SESSION] cleanupInvalidLearnedWords executed for uid=${_user!.uid}',
           );
         }
@@ -242,32 +244,11 @@ class SessionService extends ChangeNotifier {
     Future.microtask(() async {
       try {
         if (_user != null) {
-          // Check if this is a new user for leaderboard initialization
-          final userRef = FirebaseFirestore.instance
-              .collection('users')
-              .doc(_user!.uid);
-          final userDoc = await userRef.get();
-          final isNewUser = !userDoc.exists;
-
-          // 🔥 CRITICAL FIX: Only initialize leaderboard stats for NEW users
-          if (isNewUser) {
-            Logger.i(
-              '👤 Non-critical: NEW USER - Initializing leaderboard stats for ${_user!.uid}',
-              'SessionService',
-            );
-            await LeaderboardService().updateUserStats(_user!.uid);
-          } else {
-            Logger.i(
-              '👤 Non-critical: EXISTING USER - Skipping leaderboard initialization for ${_user!.uid}',
-              'SessionService',
-            );
-          }
-
           // Set up real-time listeners after core initialization
           _setupRealTimeListener();
         }
 
-        Logger.i('✅ Non-critical services initialized', 'SessionService');
+        Logger.i('Non-critical services initialized', 'SessionService');
       } catch (e) {
         Logger.e(
           'Non-critical service initialization failed (app continues normally)',
@@ -282,15 +263,12 @@ class SessionService extends ChangeNotifier {
   /// Tüm gerekli alt koleksiyonlarla birlikte Firestore'da kullanıcı dokümanının var olduğundan emin ol
   /// Yeni kullanıcıysa (ilk kez giriş) true döndürür
   Future<void> ensureUserDocumentExists(User firebaseUser) async {
-    final userRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(firebaseUser.uid);
-    final snapshot = await userRef.get();
-
-    if (!snapshot.exists) {
-      await userRef.set({
+    final userData = await _authRepository.getUserData(firebaseUser.uid);
+    
+    if (userData == null) {
+      await _authRepository.updateUserData(firebaseUser.uid, {
         'username': firebaseUser.displayName ?? 'User',
-        'email': firebaseUser.email ?? null,
+        'email': firebaseUser.email,
         'photoURL': firebaseUser.photoURL ?? 'assets/icons/boy.svg',
         'level': 1,
         'totalXp': 0,
@@ -302,11 +280,11 @@ class SessionService extends ChangeNotifier {
         'currentStreak': 0,
         'longestStreak': 0,
         'lastLoginDate': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      }); // Removed SetOptions as it's handled in repo
     } else {
-      await userRef.update({
+      await _authRepository.updateUserData(firebaseUser.uid, {
         'lastLoginDate': FieldValue.serverTimestamp(),
-        'email': firebaseUser.email ?? null,
+        'email': firebaseUser.email,
         'photoURL': firebaseUser.photoURL ?? 'assets/icons/boy.svg',
       });
     }
@@ -317,13 +295,11 @@ class SessionService extends ChangeNotifier {
     if (_user == null) return;
 
     try {
-      final docRef = _firestore.collection('users').doc(_user!.uid);
+      final userData = await _authRepository.getUserData(_user!.uid);
 
-      final docSnapshot = await docRef.get();
-
-      if (docSnapshot.exists && docSnapshot.data() != null) {
+      if (userData != null) {
         // Ana kullanıcı dokümanından mevcut istatistikleri yükle
-        _firestoreUserData = docSnapshot.data();
+        _firestoreUserData = userData;
         Logger.i(
           'Loaded existing user stats for ${_user!.uid}: totalXp=${_firestoreUserData?['totalXp']}, level=${_firestoreUserData?['level']}, currentStreak=${_firestoreUserData?['currentStreak']}',
           'SessionService',
@@ -473,25 +449,17 @@ class SessionService extends ChangeNotifier {
   }
 
   /// Add quiz XP with automatic calculation based on quiz type
-  Future<void> addQuizXp(String quizType, int correctAnswers) async {
+  Future<void> addQuizXp(String quizType, int correctAnswers, {int quizzesCompleted = 1}) async {
     final earnedXp = calculateQuizXp(quizType, correctAnswers);
-    await addXp(earnedXp);
+    await addXp(earnedXp, quizzesCompleted: quizzesCompleted);
   }
 
   /// Add XP to user account
-  Future<void> addXp(int amount) async {
-    print('🔍 addXp called with amount: $amount');
-    print('🔍 _user: $_user');
-    print('🔍 _offlineUser: $_offlineUser');
-    print('🔍 _isOfflineMode: $_isOfflineMode');
-    print('🔍 amount <= 0: ${amount <= 0}');
+  Future<void> addXp(int amount, {int quizzesCompleted = 0}) async {
 
     if ((_user == null && _offlineUser == null) || amount <= 0) {
-      print('❌ addXp returning early - user check failed or amount <= 0');
       return;
     }
-
-    print('✅ addXp proceeding with XP addition');
 
     try {
       final userId = _user?.uid;
@@ -500,13 +468,33 @@ class SessionService extends ChangeNotifier {
         return;
       }
 
-      // Use WeeklyXpService for comprehensive XP tracking (total + weekly)
-      await WeeklyXpService.addXp(userId, amount);
+      // Update user XP in Firestore
+      // Note: Transaction logic kept here for now as it's complex business logic
+      // Ideally this should move to a UserStatsRepository
+      final userRef = FirebaseFirestore.instance.collection('users').doc(userId);
+      final summaryRef = userRef.collection('stats').doc('summary');
+      
+      await _firestore.runTransaction((transaction) async {
+        final userDoc = await transaction.get(userRef);
+        final currentTotalXp = (userDoc.data()?['totalXp'] as int?) ?? 0;
+        final newTotalXp = currentTotalXp + amount;
+        final levelData = LevelService.computeLevelData(newTotalXp);
+        
+        transaction.set(userRef, {
+          'totalXp': newTotalXp,
+          'level': levelData.level,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        
+        transaction.set(summaryRef, {
+          'totalXp': newTotalXp,
+          'quizzesCompleted': FieldValue.increment(quizzesCompleted),
+          'level': levelData.level,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      });
 
       // Log XP addition
-      debugPrint(
-        '[XP] +$amount → leaderboard_stats with weekly tracking (uid=$userId)',
-      );
 
       // Increment streak if it's a new day (first activity of the day)
       try {
@@ -527,7 +515,7 @@ class SessionService extends ChangeNotifier {
       }
 
       Logger.i(
-        '✅ XP Added successfully: $amount via WeeklyXpService',
+        '✅ XP Added successfully: $amount',
         'SessionService',
       );
     } catch (e) {
@@ -541,9 +529,9 @@ class SessionService extends ChangeNotifier {
 
     try {
       final snapshot =
-          await _firestore
-              .collection('leaderboard_stats')
-              .where('displayName', isEqualTo: displayName)
+          await FirebaseFirestore.instance
+              .collection('users')
+              .where('username', isEqualTo: displayName)
               .where(FieldPath.documentId, isNotEqualTo: _user!.uid)
               .limit(1)
               .get();
@@ -567,7 +555,6 @@ class SessionService extends ChangeNotifier {
     }
 
     try {
-      // Check if the name is unique
       final isUnique = await isDisplayNameUnique(displayName);
       if (!isUnique) {
         return {
@@ -575,210 +562,24 @@ class SessionService extends ChangeNotifier {
           'error': 'Bu isim zaten kullanılıyor. Lütfen farklı bir isim seçin.',
         };
       }
+      final previousName = _firestoreUserData?['username'] ?? _user!.displayName;
+      await updateUserData({'username': displayName, 'updatedAt': FieldValue.serverTimestamp()});
 
-      // Update Firebase Auth display name
       await _user!.updateDisplayName(displayName);
-
-      // 🔥 CRITICAL FIX: Reload Firebase Auth user to get fresh data
       await _user!.reload();
-      _user = _auth.currentUser; // Get the updated user object
-
-      // Update user_data collection
-      await updateUserData({'displayName': displayName});
-
-      // 🔥 CRITICAL FIX: Update leaderboard_stats collection with new displayName
-      await _updateLeaderboardDisplayName(displayName);
+      _user = _authRepository.currentUser;
 
       notifyListeners();
       Logger.i('Updated display name to: $displayName', 'SessionService');
       return {'success': true, 'message': 'İsminiz başarıyla güncellendi!'};
     } catch (e) {
       Logger.e('Failed to update display name', e, null, 'SessionService');
+      if (_firestoreUserData != null) {
+        _firestoreUserData!['username'] = _user?.displayName ?? _firestoreUserData!['username'];
+        notifyListeners();
+      }
       return {'success': false, 'error': 'İsim güncellenirken bir hata oluştu'};
     }
-  }
-
-  /// Update display name in leaderboard_stats collection
-  Future<void> _updateLeaderboardDisplayName(String displayName) async {
-    if (_user == null) return;
-
-    try {
-      final docRef = _firestore.collection('leaderboard_stats').doc(_user!.uid);
-      final doc = await docRef.get();
-
-      if (doc.exists) {
-        await docRef.update({
-          'displayName': displayName,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-        Logger.i(
-          'Updated leaderboard displayName to: $displayName',
-          'SessionService',
-        );
-      } else {
-        // If leaderboard stats don't exist, create them with current user data
-        final userData = _firestoreUserData ?? {};
-
-        // LevelService kullanarak level hesapla
-        final rawTotalXp = userData['totalXp'];
-        final totalXp = rawTotalXp is int ? rawTotalXp : 0;
-        final levelData = LevelService.computeLevelData(totalXp);
-        final level = levelData.level;
-
-        final rawHighestLevel = userData['highestLevel'];
-        final highestLevel = rawHighestLevel is int ? rawHighestLevel : level;
-
-        final rawWeeklyXp = userData['weeklyXp'];
-        final weeklyXp = rawWeeklyXp is int ? rawWeeklyXp : 0;
-
-        final rawCurrentStreak = userData['currentStreak'];
-        final currentStreak = rawCurrentStreak is int ? rawCurrentStreak : 0;
-
-        final rawLongestStreak = userData['longestStreak'];
-        final longestStreak =
-            rawLongestStreak is int ? rawLongestStreak : currentStreak;
-
-        final rawQuizzesCompleted = userData['totalQuizzesCompleted'];
-        final quizzesCompleted =
-            rawQuizzesCompleted is int ? rawQuizzesCompleted : 0;
-
-        final rawLearnedWordsCount = userData['learnedWordsCount'];
-        final learnedWordsCount =
-            rawLearnedWordsCount is int ? rawLearnedWordsCount : 0;
-
-        await docRef.set({
-          'userId': _user!.uid,
-          'displayName': displayName,
-          'photoURL': _user!.photoURL,
-          'level': level, // standardized level field
-          'highestLevel': highestLevel,
-          'totalXp': totalXp,
-          'weeklyXp': weeklyXp,
-          'currentStreak': currentStreak,
-          'longestStreak': longestStreak,
-          'quizzesCompleted': quizzesCompleted,
-          'learnedWordsCount': learnedWordsCount,
-          'lastUpdated': FieldValue.serverTimestamp(),
-          'weekResetDate': _getNextMondayMidnight(),
-        });
-        Logger.i(
-          'Created leaderboard stats with displayName: $displayName',
-          'SessionService',
-        );
-      }
-
-      // Note: Removed excessive cache clearing that was causing constant refreshes
-      // The leaderboard will update naturally through Firestore real-time listeners
-      // _clearLeaderboardCache();
-    } catch (e) {
-      Logger.e(
-        'Failed to update leaderboard displayName',
-        e,
-        null,
-        'SessionService',
-      );
-    }
-  }
-
-  /// Clear leaderboard cache to force refresh
-  void _clearLeaderboardCache() {
-    try {
-      // Import and clear LeaderboardService cache
-      final leaderboardService = LeaderboardService();
-      leaderboardService.clearCache();
-      Logger.i(
-        'Cleared leaderboard cache after displayName update',
-        'SessionService',
-      );
-    } catch (e) {
-      Logger.e('Failed to clear leaderboard cache', e, null, 'SessionService');
-    }
-  }
-
-  /// Update photo URL in leaderboard_stats collection
-  Future<void> _updateLeaderboardPhotoURL(String photoURL) async {
-    if (_user == null) return;
-
-    try {
-      final docRef = _firestore.collection('leaderboard_stats').doc(_user!.uid);
-      final doc = await docRef.get();
-
-      if (doc.exists) {
-        await docRef.update({
-          'photoURL': photoURL,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-        Logger.i('Updated leaderboard photoURL', 'SessionService');
-      } else {
-        // If leaderboard stats don't exist, create them with current user data
-        final userData = _firestoreUserData ?? {};
-
-        // LevelService kullanarak level hesapla
-        final rawTotalXp = userData['totalXp'];
-        final totalXp = rawTotalXp is int ? rawTotalXp : 0;
-        final levelData = LevelService.computeLevelData(totalXp);
-        final level = levelData.level;
-
-        final rawHighestLevel = userData['highestLevel'];
-        final highestLevel = rawHighestLevel is int ? rawHighestLevel : level;
-
-        final rawWeeklyXp = userData['weeklyXp'];
-        final weeklyXp = rawWeeklyXp is int ? rawWeeklyXp : 0;
-
-        final rawCurrentStreak = userData['currentStreak'];
-        final currentStreak = rawCurrentStreak is int ? rawCurrentStreak : 0;
-
-        final rawLongestStreak = userData['longestStreak'];
-        final longestStreak =
-            rawLongestStreak is int ? rawLongestStreak : currentStreak;
-
-        final rawQuizzesCompleted = userData['totalQuizzesCompleted'];
-        final quizzesCompleted =
-            rawQuizzesCompleted is int ? rawQuizzesCompleted : 0;
-
-        final rawLearnedWordsCount = userData['learnedWordsCount'];
-        final learnedWordsCount =
-            rawLearnedWordsCount is int ? rawLearnedWordsCount : 0;
-
-        await docRef.set({
-          'userId': _user!.uid,
-          'displayName': _user!.displayName ?? 'Kullanıcı',
-          'photoURL': photoURL,
-          'level': level, // standardized level field
-          'highestLevel': highestLevel,
-          'totalXp': totalXp,
-          'weeklyXp': weeklyXp,
-          'currentStreak': currentStreak,
-          'longestStreak': longestStreak,
-          'quizzesCompleted': quizzesCompleted,
-          'learnedWordsCount': learnedWordsCount,
-          'lastUpdated': FieldValue.serverTimestamp(),
-          'weekResetDate': _getNextMondayMidnight(),
-        });
-        Logger.i('Created leaderboard stats with photoURL', 'SessionService');
-      }
-
-      // Note: Removed excessive cache clearing that was causing constant refreshes
-      // The leaderboard will update naturally through Firestore real-time listeners
-      // _clearLeaderboardCache();
-    } catch (e) {
-      Logger.e(
-        'Failed to update leaderboard photoURL',
-        e,
-        null,
-        'SessionService',
-      );
-    }
-  }
-
-  /// Get next Monday midnight for week reset
-  DateTime _getNextMondayMidnight() {
-    final now = DateTime.now();
-    final daysUntilMonday = (DateTime.monday - now.weekday) % 7;
-    final nextMonday = now.add(
-      Duration(days: daysUntilMonday == 0 ? 7 : daysUntilMonday),
-    );
-    return DateTime(nextMonday.year, nextMonday.month, nextMonday.day);
   }
 
   /// Update photo URL
@@ -790,12 +591,9 @@ class SessionService extends ChangeNotifier {
 
       // 🔥 CRITICAL FIX: Reload Firebase Auth user to get fresh data
       await _user!.reload();
-      _user = _auth.currentUser; // Get the updated user object
+      _user = _authRepository.currentUser; // Get the updated user object
 
       await updateUserData({'photoURL': photoURL});
-
-      // 🔥 CRITICAL FIX: Update leaderboard_stats collection with new photoURL
-      await _updateLeaderboardPhotoURL(photoURL);
 
       notifyListeners();
       Logger.i('Updated photo URL', 'SessionService');
@@ -815,7 +613,7 @@ class SessionService extends ChangeNotifier {
       notifyListeners();
 
       if (_syncManager.isOnline) {
-        await _auth.signOut();
+        await _authRepository.signOut();
         Logger.i('User signed out from Firebase', 'SessionService');
       } else {
         Logger.i('User signed out locally (offline mode)', 'SessionService');
@@ -873,8 +671,8 @@ class SessionService extends ChangeNotifier {
         'Attempting Firebase authentication with Google credentials',
         'SessionService',
       );
-      final userCredential = await _auth.signInWithCredential(credential);
-      _user = userCredential.user;
+      final user = await _authRepository.signInWithGoogle();
+      _user = user;
 
       if (_user != null) {
         Logger.i(
@@ -882,11 +680,8 @@ class SessionService extends ChangeNotifier {
           'SessionService',
         );
 
-        final userRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(_user!.uid);
-        final userDoc = await userRef.get();
-        final isNewUser = !userDoc.exists;
+        final userData = await _authRepository.getUserData(_user!.uid);
+        final isNewUser = userData == null;
 
         await ensureUserDocumentExists(_user!);
 
@@ -901,38 +696,11 @@ class SessionService extends ChangeNotifier {
           'SessionService',
         );
 
-        // sadece YENİ kullanıcılar için leaderboard stats başlat
-        if (isNewUser) {
-          Logger.i(
-            '👤 NEW USER: Initializing leaderboard stats after Google Sign-In for ${_user!.uid}',
-            'SessionService',
-          );
-          Logger.i(
-            '🔥 DEBUG: About to call LeaderboardService().updateUserStats for NEW user',
-            'SessionService',
-          );
-          await LeaderboardService().updateUserStats(_user!.uid);
-          Logger.i(
-            '✅ DEBUG: LeaderboardService().updateUserStats completed for NEW user',
-            'SessionService',
-          );
-        } else {
-          Logger.i(
-            '👤 EXISTING USER: Skipping leaderboard initialization after Google Sign-In for ${_user!.uid}',
-            'SessionService',
-          );
-          Logger.i(
-            '🔥 DEBUG: NOT calling LeaderboardService().updateUserStats for EXISTING user - preventing data reset',
-            'SessionService',
-          );
-        }
-
         // 🧹 Auto cleanup of invalid learned words right after sign-in
         try {
           final learnedWordsService = locator<LearnedWordsService>();
           await learnedWordsService.cleanupInvalidLearnedWords(_user!.uid);
           if (kDebugMode) {
-            debugPrint(
               'I/flutter: [SESSION] cleanupInvalidLearnedWords executed after Google sign-in for uid=${_user!.uid}',
             );
           }
@@ -978,7 +746,7 @@ class SessionService extends ChangeNotifier {
   }
 
   /// Sign in as guest (anonymous) with offline support
-  Future<User?> signInAsGuest() async {
+  Future<bool> signInAsGuest() async {
     try {
       Logger.i('Starting Anonymous Sign-In process', 'SessionService');
 
@@ -987,16 +755,13 @@ class SessionService extends ChangeNotifier {
       if (isOnline) {
         // online'dayken Firebase anonymous sign-in dene
         try {
-          final userCredential = await _auth.signInAnonymously();
+          final userCredential = await _authRepository.signInAnonymously();
           _user = userCredential.user;
           _isOfflineMode = false;
 
           if (_user != null) {
-            final userRef = FirebaseFirestore.instance
-                .collection('users')
-                .doc(_user!.uid);
-            final userDoc = await userRef.get();
-            final isNewUser = !userDoc.exists;
+            final userData = await _authRepository.getUserData(_user!.uid);
+            final isNewUser = userData == null;
 
             await ensureUserDocumentExists(_user!);
 
@@ -1007,38 +772,11 @@ class SessionService extends ChangeNotifier {
               'SessionService',
             );
 
-            // sadece YENİ kullanıcılar için leaderboard stats başlat
-            if (isNewUser) {
-              Logger.i(
-                '👤 NEW USER: Initializing leaderboard stats after Anonymous Sign-In for ${_user!.uid}',
-                'SessionService',
-              );
-              Logger.i(
-                '🔥 DEBUG: About to call LeaderboardService().updateUserStats for NEW anonymous user',
-                'SessionService',
-              );
-              await LeaderboardService().updateUserStats(_user!.uid);
-              Logger.i(
-                '✅ DEBUG: LeaderboardService().updateUserStats completed for NEW anonymous user',
-                'SessionService',
-              );
-            } else {
-              Logger.i(
-                '👤 EXISTING USER: Skipping leaderboard initialization after Anonymous Sign-In for ${_user!.uid}',
-                'SessionService',
-              );
-              Logger.i(
-                '🔥 DEBUG: NOT calling LeaderboardService().updateUserStats for EXISTING anonymous user - preventing data reset',
-                'SessionService',
-              );
-            }
-
             // 🧹 Auto cleanup of invalid learned words right after anonymous sign-in
             try {
               final learnedWordsService = locator<LearnedWordsService>();
               await learnedWordsService.cleanupInvalidLearnedWords(_user!.uid);
               if (kDebugMode) {
-                debugPrint(
                   'I/flutter: [SESSION] cleanupInvalidLearnedWords executed after Anonymous sign-in for uid=${_user!.uid}',
                 );
               }
@@ -1049,15 +787,15 @@ class SessionService extends ChangeNotifier {
               );
             }
 
-            return _user;
+            return true;
           }
-        } on FirebaseAuthException catch (e) {
+        } catch (e) {
           Logger.w(
-            'Firebase Auth failed, falling back to offline mode',
+            'Firebase Auth failed (${e.runtimeType}), falling back to offline mode',
             'SessionService',
           );
           Logger.w(
-            'Error code: ${e.code}, message: ${e.message}',
+            'Error details: $e',
             'SessionService',
           );
         }
@@ -1078,7 +816,7 @@ class SessionService extends ChangeNotifier {
           'Offline Anonymous Sign-In successful: ${_offlineUser?.uid}',
           'SessionService',
         );
-        return null; // offline user kullandığımız için Firebase User null döner
+        return true;
       } else {
         Logger.e(
           'Failed to create offline guest user',
@@ -1086,7 +824,7 @@ class SessionService extends ChangeNotifier {
           null,
           'SessionService',
         );
-        return null;
+        return false;
       }
     } catch (e, stackTrace) {
       Logger.e(
@@ -1095,7 +833,7 @@ class SessionService extends ChangeNotifier {
         stackTrace,
         'SessionService',
       );
-      return null;
+      return false;
     }
   }
 
@@ -1131,20 +869,6 @@ class SessionService extends ChangeNotifier {
           path: 'users/$userId',
           type: SyncOperationType.update,
           data: firestoreUpdates,
-        );
-
-        debugPrint(
-          '🔥 DEBUG: Updating leaderboard stats after quiz - XP: $score, Quizzes: 1',
-        );
-        await LeaderboardService().updateUserStats(
-          userId,
-          xpEarned: score,
-          quizzesCompleted: 1,
-          displayName: _user!.displayName ?? 'Anonymous',
-          photoURL: _user!.photoURL,
-        );
-        debugPrint(
-          '✅ DEBUG: Leaderboard stats updated successfully after quiz',
         );
       }
 
@@ -1182,19 +906,6 @@ class SessionService extends ChangeNotifier {
           type: SyncOperationType.update,
           data: firestoreUpdates,
         );
-
-        debugPrint(
-          '🔥 DEBUG: Updating leaderboard stats after XP gain - XP: $xpGained',
-        );
-        await LeaderboardService().updateUserStats(
-          userId,
-          xpEarned: xpGained,
-          displayName: _user!.displayName ?? 'Anonymous',
-          photoURL: _user!.photoURL,
-        );
-        debugPrint(
-          '✅ DEBUG: Leaderboard stats updated successfully after XP gain',
-        );
       }
 
       Logger.i(
@@ -1230,19 +941,6 @@ class SessionService extends ChangeNotifier {
           path: 'users/$userId',
           type: SyncOperationType.update,
           data: firestoreUpdates,
-        );
-
-        debugPrint(
-          '🔥 DEBUG: Updating leaderboard stats after word learned - XP: $xpGained',
-        );
-        await LeaderboardService().updateUserStats(
-          userId,
-          xpEarned: xpGained,
-          displayName: _user!.displayName ?? 'Anonymous',
-          photoURL: _user!.photoURL,
-        );
-        debugPrint(
-          '✅ DEBUG: Leaderboard stats updated successfully after word learned',
         );
       }
 
@@ -1318,12 +1016,12 @@ class SessionService extends ChangeNotifier {
           type: SyncOperationType.update,
           data: data,
         );
-        Logger.i('🔄 Queued sync operation for Firestore', 'SessionService');
+        Logger.i('Queued sync operation for Firestore', 'SessionService');
       }
 
       notifyListeners();
 
-      Logger.i('✅ updateUserData completed successfully', 'SessionService');
+      Logger.i('updateUserData completed successfully', 'SessionService');
     } catch (e) {
       Logger.e('Failed to update user data', e, null, 'SessionService');
     } finally {
@@ -1379,9 +1077,8 @@ class SessionService extends ChangeNotifier {
     if (_user == null || _isOfflineMode) return;
 
     _userDataSubscription?.cancel();
-    _leaderboardStatsSubscription?.cancel();
 
-    try {
+    try{
       final docRef = _firestore.collection('users').doc(_user!.uid);
 
       _userDataSubscription = docRef.snapshots().listen(
@@ -1420,8 +1117,6 @@ class SessionService extends ChangeNotifier {
           Logger.e('Real-time listener error', error, null, 'SessionService');
         },
       );
-
-      _setupLeaderboardStatsListener();
 
       Logger.i(
         '📡 Enhanced real-time listener set up for user stats',
@@ -1471,73 +1166,11 @@ class SessionService extends ChangeNotifier {
     });
   }
 
-  /// Set up real-time listener for leaderboard_stats collection
-  void _setupLeaderboardStatsListener() {
-    if (_user == null || _isOfflineMode) return;
-
-    try {
-      final userLeaderboardRef = _firestore
-          .collection('leaderboard_stats')
-          .where('userId', isEqualTo: _user!.uid)
-          .limit(1);
-
-      _leaderboardStatsSubscription = userLeaderboardRef.snapshots().listen(
-        (snapshot) {
-          if (snapshot.docs.isNotEmpty) {
-            final leaderboardData = snapshot.docs.first.data();
-
-            // sadece anlamlı güncelleme varsa ve data gerçekten değiştiyse notify et
-            if (_firestoreUserData != null) {
-              final hasChanges =
-                  _firestoreUserData!['currentStreak'] !=
-                      leaderboardData['currentStreak'] ||
-                  _firestoreUserData!['longestStreak'] !=
-                      leaderboardData['longestStreak'] ||
-                  _firestoreUserData!['weeklyXp'] !=
-                      leaderboardData['weeklyXp'];
-
-              if (hasChanges) {
-                Logger.i(
-                  '📊 Leaderboard stats update: currentStreak=${leaderboardData['currentStreak']}, longestStreak=${leaderboardData['longestStreak']}, weeklyXp=${leaderboardData['weeklyXp']}',
-                  'SessionService',
-                );
-
-                _debouncedNotifyListeners();
-              }
-            }
-          }
-        },
-        onError: (error) {
-          Logger.e(
-            'Leaderboard stats listener error',
-            error,
-            null,
-            'SessionService',
-          );
-        },
-      );
-
-      Logger.i(
-        '📊 Real-time listener set up for leaderboard stats',
-        'SessionService',
-      );
-    } catch (e) {
-      Logger.e(
-        'Failed to set up leaderboard stats listener',
-        e,
-        null,
-        'SessionService',
-      );
-    }
-  }
-
   /// Test method to verify synchronization between cached and Firestore data
   Future<void> testSynchronizationFix() async {
-    print('🔄 SYNCHRONIZATION TEST STARTED');
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      print('❌ SYNC TEST: No authenticated user');
       return;
     }
 
@@ -1550,55 +1183,42 @@ class SessionService extends ChangeNotifier {
               .get();
 
       if (!freshDoc.exists) {
-        print('❌ SYNC TEST: User document does not exist');
         return;
       }
 
       final freshData = freshDoc.data()!;
 
       // Compare with cached data
-      print('🔍 SYNC TEST: Comparing cached vs Firestore data');
-      print(
         '📊 Cached totalXp: ${_firestoreUserData?['totalXp']} | Firestore totalXp: ${freshData['totalXp']}',
       );
-      print(
         '📊 Cached learnedWordsCount: ${_firestoreUserData?['learnedWordsCount']} | Firestore learnedWordsCount: ${freshData['learnedWordsCount']}',
       );
-      print(
         '📊 Cached totalQuizzesCompleted: ${_firestoreUserData?['totalQuizzesCompleted']} | Firestore totalQuizzesCompleted: ${freshData['totalQuizzesCompleted']}',
       );
 
       bool needsSync = false;
 
       if (_firestoreUserData?['totalXp'] != freshData['totalXp']) {
-        print('⚠️ SYNC ISSUE: totalXp mismatch');
         needsSync = true;
       }
 
       if (_firestoreUserData?['learnedWordsCount'] !=
           freshData['learnedWordsCount']) {
-        print('⚠️ SYNC ISSUE: learnedWordsCount mismatch');
         needsSync = true;
       }
 
       if (_firestoreUserData?['totalQuizzesCompleted'] !=
           freshData['totalQuizzesCompleted']) {
-        print('⚠️ SYNC ISSUE: totalQuizzesCompleted mismatch');
         needsSync = true;
       }
 
       if (needsSync) {
-        print('🔄 SYNC TEST: Triggering refreshStats()');
         await refreshStats();
-        print('✅ SYNC TEST: Stats refreshed successfully');
       } else {
-        print('✅ SYNC TEST: All data is synchronized');
       }
     } catch (e) {
-      print('❌ SYNC TEST ERROR: $e');
     }
 
-    print('🏁 SYNCHRONIZATION TEST COMPLETED');
   }
 
   /// Refresh user data from Firebase Auth and notify listeners
@@ -1612,7 +1232,6 @@ class SessionService extends ChangeNotifier {
   @override
   void dispose() {
     _userDataSubscription?.cancel();
-    _leaderboardStatsSubscription?.cancel();
     _notifyDebounceTimer?.cancel();
     _coreReadyController.close();
     super.dispose();

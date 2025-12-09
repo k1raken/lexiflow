@@ -90,16 +90,16 @@ class FirestoreBatchHelper {
         await batch.commit();
         perfTask.finish();
         
-        Logger.i('✅ Batch commit başarılı: $operationCount işlem', 'FirestoreBatchHelper');
+        Logger.i('Batch commit başarılı: $operationCount işlem', 'FirestoreBatchHelper');
         break;
       } catch (e) {
         retries++;
         if (retries >= _maxRetries) {
-          Logger.e('❌ Batch commit başarısız (son deneme): $e', e, null, 'FirestoreBatchHelper');
+          Logger.e('Batch commit başarısız (son deneme): $e', e, null, 'FirestoreBatchHelper');
           rethrow;
         }
         
-        Logger.w('⚠️ Batch commit başarısız (deneme $retries/$_maxRetries): $e', 'FirestoreBatchHelper');
+        Logger.w('Batch commit başarısız (deneme $retries/$_maxRetries): $e', 'FirestoreBatchHelper');
         await Future.delayed(Duration(milliseconds: _retryDelayMs * retries));
       }
     }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../utils/transitions.dart';
+import '../utils/design_system.dart';
 
 ThemeData buildLexiFlowTheme(ColorScheme scheme) {
   final base = ThemeData(
@@ -32,6 +34,12 @@ ThemeData buildLexiFlowTheme(ColorScheme scheme) {
   return base.copyWith(
     scaffoldBackgroundColor: scheme.surface,
     textTheme: textTheme,
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: FadeThroughPageTransitionsBuilder(),
+        TargetPlatform.iOS: FadeThroughPageTransitionsBuilder(),
+      },
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,
       foregroundColor: scheme.onSurface,
@@ -45,7 +53,7 @@ ThemeData buildLexiFlowTheme(ColorScheme scheme) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: scheme.surfaceVariant.withOpacity(0.8),
+      fillColor: scheme.surfaceContainerHighest.withOpacity(0.8),
       hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(0.7)),
       labelStyle: TextStyle(color: scheme.onSurfaceVariant),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

@@ -1,33 +1,25 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // User data - allow limited read access for username uniqueness check
+    // User data - allow full read/write access for owner
     match /users/{userId} {
-      // Full access to own document
       allow read, write: if request.auth != null && request.auth.uid == userId;
       
-      // Username benzersizlik kontrolü için basit read izni
-      // Sadece username field'ı için sınırlı sorgu
-      allow read: if request.auth != null && 
-                     request.query.limit <= 10; // maksimum 10 kayıt
-      
-      // User's daily words subcollection
-      match /daily_words/{docId} {
+      match /stats/{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
-      
-      // Other user subcollections (if any)
+
       match /{subcollection=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
-    
-    // Leaderboard stats - allow read for all authenticated users, write only for document owner
+
+    // Leaderboard stats - allow read/write for owner
     match /leaderboard_stats/{userId} {
-      allow read: if request.auth != null;        // All signed-in users can view leaderboard
-      allow write: if request.auth.uid == userId; // Only owner can update their stats
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    
+
+
     // Global collections that all authenticated users can read
     match /categories/{document} {
       allow read: if request.auth != null;
@@ -81,3 +73,4 @@ service cloud.firestore {
     }
   }
 }
+

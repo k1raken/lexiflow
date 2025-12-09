@@ -20,12 +20,10 @@ class OfflineStorageManager {
   static const String _userDataKey = 'user_data';
   static const String _userStatsKey = 'user_stats';
   static const String _wordCacheKey = 'word_cache';
-  static const String _leaderboardCacheKey = 'leaderboard_cache';
   
   // Cache expiry (milliseconds)
   static const int _userDataExpiry = 24 * 60 * 60 * 1000; // 24 hours
   static const int _wordCacheExpiry = 12 * 60 * 60 * 1000; // 12 hours
-  static const int _leaderboardCacheExpiry = 5 * 60 * 1000; // 5 minutes
   
   OfflineStorageManager._internal() {
     _init();
@@ -246,49 +244,7 @@ class OfflineStorageManager {
     }
   }
   
-  /// Save leaderboard cache
-  Future<bool> saveLeaderboardCache(String key, List<Map<String, dynamic>> data) async {
-    await ensureInitialized();
-    try {
-      final cacheData = {
-        'data': data,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      };
-      
-      final jsonString = jsonEncode(cacheData);
-      final result = await _prefs!.setString('$_leaderboardCacheKey:$key', jsonString);
-      return result;
-    } catch (e) {
-      Logger.e('Error saving leaderboard cache', e, null, 'OfflineStorageManager');
-      return false;
-    }
-  }
-  
-  /// Load leaderboard cache
-  Future<List<Map<String, dynamic>>?> loadLeaderboardCache(String key) async {
-    await ensureInitialized();
-    try {
-      final jsonString = _prefs!.getString('$_leaderboardCacheKey:$key');
-      if (jsonString == null) {
-        return null;
-      }
-      
-      final Map<String, dynamic> cacheData = jsonDecode(jsonString);
-      final timestamp = cacheData['timestamp'] as int;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      
-      // Check if cache is expired
-      if (now - timestamp > _leaderboardCacheExpiry) {
-        return null;
-      }
-      
-      final List<dynamic> decoded = cacheData['data'] as List<dynamic>;
-      return decoded.cast<Map<String, dynamic>>();
-    } catch (e) {
-      Logger.e('Error loading leaderboard cache', e, null, 'OfflineStorageManager');
-      return null;
-    }
-  }
+
   
   /// Clear all caches
   Future<bool> clearAllCaches() async {
@@ -298,8 +254,7 @@ class OfflineStorageManager {
       
       for (final key in keys) {
         if (key.startsWith(_userDataKey) || 
-            key.startsWith(_wordCacheKey) || 
-            key.startsWith(_leaderboardCacheKey)) {
+            key.startsWith(_wordCacheKey)) {
           await _prefs!.remove(key);
         }
       }
@@ -324,8 +279,7 @@ class OfflineStorageManager {
       for (final key in keys) {
         try {
           if (key.startsWith(_userDataKey) || 
-              key.startsWith(_wordCacheKey) || 
-              key.startsWith(_leaderboardCacheKey)) {
+              key.startsWith(_wordCacheKey)) {
             
             final jsonString = _prefs!.getString(key);
             if (jsonString != null) {
@@ -335,10 +289,8 @@ class OfflineStorageManager {
               int expiryTime;
               if (key.startsWith(_userDataKey)) {
                 expiryTime = _userDataExpiry;
-              } else if (key.startsWith(_wordCacheKey)) {
-                expiryTime = _wordCacheExpiry;
               } else {
-                expiryTime = _leaderboardCacheExpiry;
+                expiryTime = _wordCacheExpiry;
               }
               
               if (now - timestamp > expiryTime) {

@@ -21,20 +21,20 @@ class _UsernameEditDialogState extends State<UsernameEditDialog>
   late AnimationController _slideController;
   late AnimationController _fadeController;
   late AnimationController _scaleController;
-  
+
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
-  
+
   bool _hasChanges = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    
+
     _controller = TextEditingController(text: widget.currentUsername);
-    
+
     // animasyon kontrolcüleri
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 500),
@@ -48,36 +48,28 @@ class _UsernameEditDialogState extends State<UsernameEditDialog>
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
+
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 1),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
-    
+    ).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+    );
+
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeOut,
-    ));
-    
-    _scaleAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _scaleController,
-      curve: Curves.elasticOut,
-    ));
-    
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
+    );
+
     // animasyonları başlat
     _slideController.forward();
     _fadeController.forward();
     _scaleController.forward();
-    
+
     // text değişikliklerini dinle
     _controller.addListener(() {
       setState(() {
@@ -98,21 +90,21 @@ class _UsernameEditDialogState extends State<UsernameEditDialog>
 
   void _handleSave() {
     final newUsername = _controller.text.trim();
-    
+
     if (newUsername.isEmpty) {
       setState(() {
         _errorMessage = 'Kullanıcı adı boş olamaz';
       });
       return;
     }
-    
+
     if (newUsername.length > 20) {
       setState(() {
         _errorMessage = 'Kullanıcı adı 20 karakterden uzun olamaz';
       });
       return;
     }
-    
+
     widget.onSave(newUsername);
   }
 
@@ -121,7 +113,7 @@ class _UsernameEditDialogState extends State<UsernameEditDialog>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
-    
+
     return FadeTransition(
       opacity: _fadeAnimation,
       child: SlideTransition(
@@ -161,9 +153,9 @@ class _UsernameEditDialogState extends State<UsernameEditDialog>
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    
+
                     const SizedBox(height: AppSpacing.lg),
-                    
+
                     // text field
                     TextField(
                       controller: _controller,
@@ -182,15 +174,11 @@ class _UsernameEditDialogState extends State<UsernameEditDialog>
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: colorScheme.outline,
-                          ),
+                          borderSide: BorderSide(color: colorScheme.outline),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: colorScheme.outline,
-                          ),
+                          borderSide: BorderSide(color: colorScheme.outline),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -214,16 +202,17 @@ class _UsernameEditDialogState extends State<UsernameEditDialog>
                           ),
                         ),
                         filled: true,
-                        fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                        fillColor: colorScheme.surfaceContainerHighest
+                            .withOpacity(0.3),
                         contentPadding: const EdgeInsets.all(AppSpacing.md),
                         errorText: _errorMessage,
                       ),
                       autofocus: true,
                       onSubmitted: (_) => _handleSave(),
                     ),
-                    
+
                     const SizedBox(height: AppSpacing.lg),
-                    
+
                     // butonlar
                     Row(
                       children: [
@@ -246,9 +235,9 @@ class _UsernameEditDialogState extends State<UsernameEditDialog>
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(width: AppSpacing.md),
-                        
+
                         Expanded(
                           child: ElevatedButton(
                             onPressed: _hasChanges ? _handleSave : null,

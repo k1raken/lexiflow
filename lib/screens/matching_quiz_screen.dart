@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
+import 'package:animations/animations.dart';
+import 'package:lexiflow/utils/transitions.dart';
+import 'package:lexiflow/utils/feature_flags.dart';
 import '../models/word_model.dart';
 import '../models/category_theme.dart';
 import '../services/word_loader.dart';
@@ -9,21 +11,19 @@ import '../utils/logger.dart';
 class MatchingQuizScreen extends StatefulWidget {
   final String category;
 
-  const MatchingQuizScreen({
-    super.key,
-    required this.category,
-  });
+  const MatchingQuizScreen({super.key, required this.category});
 
   @override
   State<MatchingQuizScreen> createState() => _MatchingQuizScreenState();
 }
 
-class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProviderStateMixin {
+class _MatchingQuizScreenState extends State<MatchingQuizScreen>
+    with TickerProviderStateMixin {
   List<Word> _words = [];
-  List<MatchingPair> _pairs = [];
+  final List<MatchingPair> _pairs = [];
   List<String> _leftColumn = [];
   List<String> _rightColumn = [];
-  Set<int> _matchedPairs = {};
+  final Set<int> _matchedPairs = {};
   int? _selectedLeftIndex;
   int? _selectedRightIndex;
   bool _isLoading = true;
@@ -31,7 +31,7 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
   String _errorMessage = '';
   bool _showingFeedback = false;
   int _correctMatches = 0;
-  
+
   // animasyon kontrolcüleri
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
@@ -39,21 +39,17 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
   @override
   void initState() {
     super.initState();
-    
+
     // shake animasyonu için controller
     _shakeController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
-    
-    _shakeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _shakeController,
-      curve: Curves.elasticIn,
-    ));
-    
+
+    _shakeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
+    );
+
     _loadWordsAndGenerateGame();
   }
 
@@ -71,12 +67,15 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
       });
 
       // kategori kelimelerini yükle
-      List<Word> categoryWords = await WordLoader.loadCategoryWords(widget.category);
-      
+      List<Word> categoryWords = await WordLoader.loadCategoryWords(
+        widget.category,
+      );
+
       if (categoryWords.length < 8) {
         setState(() {
           _hasError = true;
-          _errorMessage = 'Bu kategoride yeterli kelime yok. En az 8 kelime gerekli.';
+          _errorMessage =
+              'Bu kategoride yeterli kelime yok. En az 8 kelime gerekli.';
           _isLoading = false;
         });
         return;
@@ -93,7 +92,9 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
         _isLoading = false;
       });
 
-      Logger.i('Eşleştirme quiz başlatıldı: ${_pairs.length} çift, kategori: ${widget.category}');
+      Logger.i(
+        'Eşleştirme quiz başlatıldı: ${_pairs.length} çift, kategori: ${widget.category}',
+      );
     } catch (e) {
       Logger.e('Eşleştirme quiz yükleme hatası: $e');
       setState(() {
@@ -108,20 +109,18 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
     _pairs.clear();
     _leftColumn.clear();
     _rightColumn.clear();
-    
+
     // çiftleri oluştur
     for (int i = 0; i < _words.length; i++) {
-      _pairs.add(MatchingPair(
-        id: i,
-        word: _words[i].word,
-        meaning: _words[i].meaning,
-      ));
+      _pairs.add(
+        MatchingPair(id: i, word: _words[i].word, meaning: _words[i].meaning),
+      );
     }
-    
+
     // sol sütun (kelimeler) ve sağ sütun (anlamlar) oluştur
     _leftColumn = _pairs.map((pair) => pair.word).toList();
     _rightColumn = _pairs.map((pair) => pair.meaning).toList();
-    
+
     // sütunları ayrı ayrı karıştır
     _leftColumn.shuffle();
     _rightColumn.shuffle();
@@ -129,7 +128,7 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
 
   void _selectItem(bool isLeft, int index) {
     if (_showingFeedback) return;
-    
+
     setState(() {
       if (isLeft) {
         _selectedLeftIndex = _selectedLeftIndex == index ? null : index;
@@ -147,21 +146,21 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
 
   void _checkMatch() {
     if (_selectedLeftIndex == null || _selectedRightIndex == null) return;
-    
+
     String selectedWord = _leftColumn[_selectedLeftIndex!];
     String selectedMeaning = _rightColumn[_selectedRightIndex!];
-    
+
     // doğru eşleşmeyi bul
     MatchingPair? correctPair = _pairs.firstWhere(
       (pair) => pair.word == selectedWord,
     );
-    
+
     bool isCorrect = correctPair.meaning == selectedMeaning;
-    
+
     setState(() {
       _showingFeedback = true;
     });
-    
+
     if (isCorrect) {
       // doğru eşleşme
       setState(() {
@@ -169,9 +168,9 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
         _matchedPairs.add(_selectedRightIndex! + 100); // sağ sütun için offset
         _correctMatches++;
       });
-      
+
       Logger.i('Doğru eşleşme: $selectedWord - $selectedMeaning');
-      
+
       // tüm eşleşmeler tamamlandı mı?
       if (_correctMatches == _pairs.length) {
         Future.delayed(const Duration(milliseconds: 500), () {
@@ -184,10 +183,10 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
       _shakeController.forward().then((_) {
         _shakeController.reset();
       });
-      
+
       Logger.w('Yanlış eşleşme: $selectedWord - $selectedMeaning');
     }
-    
+
     // feedback'i temizle
     Future.delayed(Duration(milliseconds: isCorrect ? 500 : 1000), () {
       if (mounted) {
@@ -205,30 +204,42 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
   void _finishQuiz() async {
     // quiz tamamlandı, sonuç ekranına git
     int earnedXp = SessionService.calculateQuizXp('matching', _correctMatches);
-    
+
     // XP'yi ekle
     await SessionService().addQuizXp('matching', _correctMatches);
-    
-    Logger.i('Matching Quiz completed: $_correctMatches/${_pairs.length} correct, +$earnedXp XP', 'MatchingQuiz');
-    
+
+    Logger.i(
+      'Matching Quiz completed: $_correctMatches/${_pairs.length} correct, +$earnedXp XP',
+      'MatchingQuiz',
+    );
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => MatchingQuizResultScreen(
-            correctAnswers: _correctMatches,
-            totalQuestions: _pairs.length,
-            earnedXp: earnedXp,
-            category: widget.category,
-          ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
+        FeatureFlags.useSharedAxisVerticalForModals
+            ? sharedAxisRoute(
+                builder:
+                    (context) => MatchingQuizResultScreen(
+                      correctAnswers: _correctMatches,
+                      totalQuestions: _pairs.length,
+                      earnedXp: earnedXp,
+                      category: widget.category,
+                    ),
+                type: SharedAxisTransitionType.vertical,
+                duration: const Duration(milliseconds: 220),
+                reverseDuration: const Duration(milliseconds: 180),
+              )
+            : fadeThroughRoute(
+                builder:
+                    (context) => MatchingQuizResultScreen(
+                      correctAnswers: _correctMatches,
+                      totalQuestions: _pairs.length,
+                      earnedXp: earnedXp,
+                      category: widget.category,
+                    ),
+                duration: const Duration(milliseconds: 220),
+                reverseDuration: const Duration(milliseconds: 180),
+              ),
       );
     }
   }
@@ -236,13 +247,14 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
   @override
   Widget build(BuildContext context) {
     // kategori temasını al, yoksa varsayılan kullan
-    final theme = categoryThemes[widget.category] ?? 
-      const CategoryTheme(
-        emoji: '🎯',
-        color: Colors.blueAccent,
-        title: 'Quiz',
-        description: 'Hazırsan başlayalım!',
-      );
+    final theme =
+        categoryThemes[widget.category] ??
+        const CategoryTheme(
+          emoji: '🎯',
+          color: Colors.blueAccent,
+          title: 'Quiz',
+          description: 'Hazırsan başlayalım!',
+        );
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -257,9 +269,7 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
           color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      body: SafeArea(
-        child: _buildBody(),
-      ),
+      body: SafeArea(child: _buildBody()),
     );
   }
 
@@ -308,7 +318,9 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
               Text(
                 _errorMessage,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -328,13 +340,14 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
 
   Widget _buildGameContent() {
     // kategori temasını al
-    final theme = categoryThemes[widget.category] ?? 
-      const CategoryTheme(
-        emoji: '🎯',
-        color: Colors.blueAccent,
-        title: 'Quiz',
-        description: 'Hazırsan başlayalım!',
-      );
+    final theme =
+        categoryThemes[widget.category] ??
+        const CategoryTheme(
+          emoji: '🎯',
+          color: Colors.blueAccent,
+          title: 'Quiz',
+          description: 'Hazırsan başlayalım!',
+        );
 
     return Column(
       children: [
@@ -368,7 +381,9 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
                   Text(
                     'Kategori: ${theme.emoji} ${theme.title}',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.8),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -417,7 +432,9 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
                         child: Center(
                           child: Text(
                             'Kelimeler',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleMedium?.copyWith(
                               color: theme.color,
                               fontWeight: FontWeight.bold,
                             ),
@@ -428,7 +445,8 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
                       Expanded(
                         child: ListView.separated(
                           itemCount: _leftColumn.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 10),
+                          separatorBuilder:
+                              (context, index) => const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             return _buildMatchingCard(
                               _leftColumn[index],
@@ -453,13 +471,17 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
                       Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.secondary.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Center(
                           child: Text(
                             'Anlamlar',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleMedium?.copyWith(
                               color: Theme.of(context).colorScheme.secondary,
                               fontWeight: FontWeight.bold,
                             ),
@@ -470,7 +492,8 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
                       Expanded(
                         child: ListView.separated(
                           itemCount: _rightColumn.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 10),
+                          separatorBuilder:
+                              (context, index) => const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             return _buildMatchingCard(
                               _rightColumn[index],
@@ -494,7 +517,13 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
     );
   }
 
-  Widget _buildMatchingCard(String text, int index, bool isLeft, bool isSelected, bool isMatched) {
+  Widget _buildMatchingCard(
+    String text,
+    int index,
+    bool isLeft,
+    bool isSelected,
+    bool isMatched,
+  ) {
     Color? backgroundColor;
     Color? borderColor;
     Color? textColor;
@@ -507,19 +536,17 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
       backgroundColor = Colors.green.shade50;
       borderColor = Colors.green.shade300;
       textColor = Colors.green.shade700;
-      trailingIcon = Icon(
-        Icons.lock,
-        color: Colors.green.shade600,
-        size: 18,
-      );
+      trailingIcon = Icon(Icons.lock, color: Colors.green.shade600, size: 18);
     } else if (_showingFeedback && isSelected) {
       // feedback durumunda renk kontrolü
       if (_selectedLeftIndex != null && _selectedRightIndex != null) {
         String selectedWord = _leftColumn[_selectedLeftIndex!];
         String selectedMeaning = _rightColumn[_selectedRightIndex!];
-        MatchingPair? correctPair = _pairs.firstWhere((pair) => pair.word == selectedWord);
+        MatchingPair? correctPair = _pairs.firstWhere(
+          (pair) => pair.word == selectedWord,
+        );
         bool isCorrect = correctPair.meaning == selectedMeaning;
-        
+
         if (isCorrect) {
           backgroundColor = Colors.green.shade50;
           borderColor = Colors.green.shade300;
@@ -560,13 +587,16 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
               color: borderColor!,
               width: isSelected ? 2.5 : 1.5,
             ),
-            boxShadow: isSelected ? [
-              BoxShadow(
-                color: borderColor.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ] : null,
+            boxShadow:
+                isSelected
+                    ? [
+                      BoxShadow(
+                        color: borderColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                    : null,
           ),
           child: Row(
             children: [
@@ -575,7 +605,10 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
                   text,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: textColor,
-                    fontWeight: isSelected || isMatched ? FontWeight.w600 : FontWeight.w500,
+                    fontWeight:
+                        isSelected || isMatched
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                     height: 1.3,
                   ),
                   textAlign: TextAlign.center,
@@ -598,8 +631,10 @@ class _MatchingQuizScreenState extends State<MatchingQuizScreen> with TickerProv
         builder: (context, child) {
           return Transform.translate(
             offset: Offset(
-              10 * _shakeAnimation.value * (1 - _shakeAnimation.value) * 
-              ((_shakeAnimation.value * 10).floor() % 2 == 0 ? 1 : -1),
+              10 *
+                  _shakeAnimation.value *
+                  (1 - _shakeAnimation.value) *
+                  ((_shakeAnimation.value * 10).floor() % 2 == 0 ? 1 : -1),
               0,
             ),
             child: cardWidget,
@@ -617,11 +652,7 @@ class MatchingPair {
   final String word;
   final String meaning;
 
-  MatchingPair({
-    required this.id,
-    required this.word,
-    required this.meaning,
-  });
+  MatchingPair({required this.id, required this.word, required this.meaning});
 }
 
 class MatchingQuizResultScreen extends StatelessWidget {
@@ -671,9 +702,14 @@ class MatchingQuizResultScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(40),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          color:
+                              Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
                           border: Border.all(
-                            color: _getPerformanceColor(percentage).withOpacity(0.3),
+                            color: _getPerformanceColor(
+                              percentage,
+                            ).withOpacity(0.3),
                             width: 3,
                           ),
                         ),
@@ -687,7 +723,9 @@ class MatchingQuizResultScreen extends StatelessWidget {
                       // başlık
                       Text(
                         'Eşleştirme Tamamlandı!',
-                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineLarge?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.bold,
                         ),
@@ -736,7 +774,9 @@ class MatchingQuizResultScreen extends StatelessWidget {
                       Text(
                         'Kategori: $category',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.5),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -775,7 +815,8 @@ class MatchingQuizResultScreen extends StatelessWidget {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => MatchingQuizScreen(category: category),
+                        builder:
+                            (context) => MatchingQuizScreen(category: category),
                       ),
                     );
                   },
@@ -797,16 +838,19 @@ class MatchingQuizResultScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildResultCard(BuildContext context, String title, String value, Color color, IconData icon) {
+  Widget _buildResultCard(
+    BuildContext context,
+    String title,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-          width: 2,
-        ),
+        border: Border.all(color: color.withOpacity(0.2), width: 2),
       ),
       child: Row(
         children: [
@@ -826,7 +870,9 @@ class MatchingQuizResultScreen extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
                   ),
                 ),
                 const SizedBox(height: 4),

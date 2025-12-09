@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:math';
+import 'package:provider/provider.dart';
+import 'package:animations/animations.dart';
+import 'package:lexiflow/utils/transitions.dart';
+import 'package:lexiflow/utils/feature_flags.dart';
 import '../models/word_model.dart';
 import '../services/word_loader.dart';
 import '../services/session_service.dart';
-import '../utils/logger.dart';
 import '../services/learned_words_service.dart';
+import '../utils/logger.dart';
 import '../di/locator.dart';
 
 class MultipleChoiceQuizScreen extends StatefulWidget {
@@ -20,7 +24,7 @@ class MultipleChoiceQuizScreen extends StatefulWidget {
 
 class _MultipleChoiceQuizScreenState extends State<MultipleChoiceQuizScreen> {
   List<Word> _words = [];
-  List<QuizQuestion> _questions = [];
+  final List<QuizQuestion> _questions = [];
   int _currentQuestionIndex = 0;
   int _correctAnswers = 0;
   bool _isLoading = true;
@@ -124,9 +128,14 @@ class _MultipleChoiceQuizScreenState extends State<MultipleChoiceQuizScreen> {
       _showResult = true;
 
       if (index == _questions[_currentQuestionIndex].correctIndex) {
+        // Correct answer - medium haptic feedback
+        HapticFeedback.mediumImpact();
         _correctAnswers++;
         // Bu sorunun doğru kelimesini learned listesine ekle
         _correctlyAnsweredWords.add(_words[_currentQuestionIndex]);
+      } else {
+        // Wrong answer - vibrate feedback
+        HapticFeedback.vibrate();
       }
     });
   }
@@ -145,6 +154,68 @@ class _MultipleChoiceQuizScreenState extends State<MultipleChoiceQuizScreen> {
   }
 
   void _finishQuiz() async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black87,
+      builder: (_) => WillPopScope(
+        onWillPop: () async => false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            padding: const EdgeInsets.all(24.0),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1F2E),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                SizedBox(
+                  width: 70,
+                  height: 70,
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF33C4B3),
+                    strokeWidth: 5,
+                  ),
+                ),
+                SizedBox(height: 28),
+                Text(
+                  ' Sonuçlarınız Hazırlanıyor',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Lütfen bekleyin...',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
     // quiz tamamlandı, sonuç ekranına git
     int earnedXp = SessionService.calculateQuizXp(
       'multiple_choice',
@@ -160,10 +231,10 @@ class _MultipleChoiceQuizScreenState extends State<MultipleChoiceQuizScreen> {
 
     // Quiz tamamlandı logundan hemen sonra learned words işaretleme
     try {
-      if (kDebugMode)
-        print(
+      if (kDebugMode) {
           '[QUIZ_DEBUG] entering _markLearnedWords, results=${_correctlyAnsweredWords.length}',
         );
+      }
       final learnedWordsService = locator<LearnedWordsService>();
       final session = locator<SessionService>();
       final userId = session.currentUser?.uid;
@@ -200,34 +271,49 @@ class _MultipleChoiceQuizScreenState extends State<MultipleChoiceQuizScreen> {
           added++;
         }
         if (kDebugMode) {
-          print(
             '[QUIZ_DEBUG] Marked $added learned words (category: ${widget.category})',
           );
         }
       } else {
-        if (kDebugMode)
-          print('[QUIZ_DEBUG] Skipped marking (uid or results missing)');
+        if (kDebugMode) {
+        }
       }
     } catch (e) {
-      if (kDebugMode) print('[QUIZ_DEBUG] Error marking learned words: $e');
     }
 
+    // Quiz completion is now tracked via session service
+
     if (mounted) {
+      // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop();
+      
+      // Navigate to results
       Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder:
-              (context, animation, secondaryAnimation) => QuizResultScreen(
-                correctAnswers: _correctAnswers,
-                totalQuestions: _questions.length,
-                earnedXp: earnedXp,
-                category: widget.category,
+        FeatureFlags.useSharedAxisVerticalForModals
+            ? sharedAxisRoute(
+                builder:
+                    (context) => QuizResultScreen(
+                      correctAnswers: _correctAnswers,
+                      totalQuestions: _questions.length,
+                      earnedXp: earnedXp,
+                      category: widget.category,
+                    ),
+                type: SharedAxisTransitionType.vertical,
+                duration: const Duration(milliseconds: 220),
+                reverseDuration: const Duration(milliseconds: 180),
+              )
+            : fadeThroughRoute(
+                builder:
+                    (context) => QuizResultScreen(
+                      correctAnswers: _correctAnswers,
+                      totalQuestions: _questions.length,
+                      earnedXp: earnedXp,
+                      category: widget.category,
+                    ),
+                duration: const Duration(milliseconds: 220),
+                reverseDuration: const Duration(milliseconds: 180),
               ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
       );
     }
   }
@@ -478,7 +564,7 @@ class _MultipleChoiceQuizScreenState extends State<MultipleChoiceQuizScreen> {
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor!, width: 2),
+            border: Border.all(color: borderColor, width: 2),
           ),
           child: Row(
             children: [

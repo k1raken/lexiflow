@@ -28,7 +28,6 @@ class StreakMigrationHelper {
             'longestStreak': data['longestStreak'] ?? 0,
             'lastActivityDate': data['lastActivityDate'] ?? FieldValue.serverTimestamp(),
           });
-          print('✅ Migrated user_stats streak data for user: ${user.uid}');
         }
       }
       
@@ -43,12 +42,10 @@ class StreakMigrationHelper {
             'currentStreak': data['currentStreak'] ?? 0,
             'longestStreak': data['longestStreak'] ?? 0,
           });
-          print('✅ Migrated leaderboard_stats streak data for user: ${user.uid}');
         }
       }
       
     } catch (e) {
-      print('❌ Error during streak migration: $e');
     }
   }
   
@@ -85,10 +82,8 @@ class StreakMigrationHelper {
         'highestLevel': sessionService.level,
       }, SetOptions(merge: true));
       
-      print('✅ Initialized streak data for new user: ${user.uid}');
       
     } catch (e) {
-      print('❌ Error initializing streak for new user: $e');
     }
   }
 }

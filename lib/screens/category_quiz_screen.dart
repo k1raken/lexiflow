@@ -1,6 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/animation.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lexiflow/di/locator.dart';
 import 'package:lexiflow/services/category_progress_service.dart';
@@ -11,6 +9,8 @@ import '../models/word_model.dart';
 import '../services/local_word_cache_service.dart';
 import '../services/word_loader.dart';
 import 'cards/add_custom_word_sheet.dart';
+import '../services/ad_service.dart';
+import '../utils/feature_flags.dart';
 import 'quiz_type_select_screen.dart';
 
 class CategoryQuizScreen extends StatefulWidget {
@@ -71,7 +71,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
     });
   }
 
-  void _startQuiz() {
+  Future<void> _startQuiz() async {
     if (categoryWords.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -85,7 +85,19 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
       );
       return;
     }
-
+    // Enforce rewarded ad gate with cooldown; grant small XP for watching
+    final adService = locator<AdService>();
+    final passed =
+        FeatureFlags.adsEnabled
+            ? await adService.enforceRewardedGateIfNeeded(
+              context: context,
+              chillMs: Duration(minutes: 20).inMilliseconds,
+              grantXpOnReward: true,
+            )
+            : true; // Reklamlar devre dışı ise doğrudan geç
+    if (!passed) return;
+    if (!mounted) return;
+    
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -95,36 +107,26 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   }
 
   void _showAddWordDialog(BuildContext context) {
-
     final accent =
-
         widget.categoryColor ?? Theme.of(context).colorScheme.primary;
 
-
-
     showModalBottomSheet<bool>(
-
       context: context,
 
       isScrollControlled: true,
 
       backgroundColor: Colors.transparent,
 
-      builder: (_) => AddCustomWordSheet(
+      builder:
+          (_) => AddCustomWordSheet(
+            categoryId: widget.category,
 
-        categoryId: widget.category,
+            accentColor: accent,
 
-        accentColor: accent,
-
-        onSave: _addCustomWord,
-
-      ),
-
+            onSave: _addCustomWord,
+          ),
     );
-
   }
-
-
 
   Future<void> _addCustomWord(
     String englishWord,
@@ -177,14 +179,14 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
               .doc(widget.category)
               .collection('words')
               .add({
-            'word': englishWord,
-            'meaning': turkishMeaning,
-            'example': example.isEmpty ? null : example,
-            'category': widget.category,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
+                'word': englishWord,
+                'meaning': turkishMeaning,
+                'example': example.isEmpty ? null : example,
+                'category': widget.category,
+                'createdAt': FieldValue.serverTimestamp(),
+              });
         } catch (e) {
-          debugPrint('Firestore custom word save failed: $e');
+
         }
       }
 
@@ -298,13 +300,15 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                         child: LinearProgressIndicator(
                           minHeight: 6,
                           value: null,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.surfaceVariant.withOpacity(0.2),
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withOpacity(0.2),
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            Theme.of(
-                              context,
-                            ).colorScheme.surfaceVariant.withOpacity(0.6),
+                            Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withOpacity(0.6),
                           ),
                           semanticsLabel: 'Yükleniyor',
                         ),

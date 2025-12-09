@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/flashcard_models.dart';
-import '../../utils/lexiflow_colors.dart';
+import '../../utils/design_system.dart';
 
 class StudyModeSelectSheet extends StatefulWidget {
   const StudyModeSelectSheet({super.key, required this.setTitle});

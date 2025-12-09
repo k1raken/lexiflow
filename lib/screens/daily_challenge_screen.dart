@@ -278,21 +278,20 @@ class _DailyChallengeScreenState extends State<DailyChallengeScreen> {
       }
 
       // Navigate to quiz
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => QuizScreen(
-              wordService: widget.wordService,
-              userService: widget.userService,
-              quizWords: quizWords,
-            ),
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => QuizScreen(
+            wordService: widget.wordService,
+            userService: widget.userService,
+            quizWords: quizWords,
           ),
-        ).then((_) {
-          // Refresh state when returning from quiz
-          if (mounted) setState(() {});
-        });
-      }
+        ),
+      ).then((_) {
+        // Refresh state when returning from quiz
+        if (mounted) setState(() {});
+      });
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

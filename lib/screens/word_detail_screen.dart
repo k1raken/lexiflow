@@ -1,6 +1,7 @@
 // lib/screens/word_detail_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../models/word_model.dart';
@@ -9,17 +10,8 @@ import '../services/session_service.dart';
 import '../services/learned_words_service.dart';
 import '../utils/design_system.dart';
 import '../utils/animation_utils.dart';
-import '../widgets/loading_widgets.dart';
 import '../widgets/lexiflow_toast.dart';
 import '../widgets/xp_popup.dart';
-
-const _lexiflowTurquoise = Color(0xFF33C4B3);
-const _lexiflowLightTurquoise = Color(0xFF70E1F5);
-const _lexiflowDeepSea = Color(0xFF203A43);
-const _lexiflowOcean = Color(0xFF2C5364);
-const _lexiflowCardBackground = Color(0xFF1A2226);
-const _lexiflowRippleTint = Color(0xFF33C4B3);
-const _lexiflowMintAccent = Color(0xFF2DD4BF);
 
 class WordDetailScreen extends StatefulWidget {
   final Word word;
@@ -145,6 +137,9 @@ class _WordDetailScreenState extends State<WordDetailScreen>
         }
 
         if (mounted && success) {
+          // Trigger satisfying haptic feedback
+          HapticFeedback.heavyImpact();
+          
           setState(() {
             _isLearned = true;
             _isMarkingLearned = false;
@@ -190,20 +185,31 @@ class _WordDetailScreenState extends State<WordDetailScreen>
     final sessionService = Provider.of<SessionService>(context);
     final wordService = Provider.of<WordService>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    final detailSurface =
-        isDark ? const Color(0xFF0F1F26) : Colors.white.withOpacity(0.08);
+    // Clean light grey background for light mode
+    final scaffoldBackground = isDark 
+        ? AppColors.textPrimary 
+        : const Color(0xFFF5F7FA);
+
+    final detailSurface = isDark 
+        ? AppDarkColors.surface 
+        : scaffoldBackground;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: scaffoldBackground,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [_lexiflowDeepSea, _lexiflowOcean],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+        width: double.infinity,
+        height: double.infinity,
+        decoration: isDark
+            ? const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.textPrimary, AppColors.primaryDark],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              )
+            : null, // No gradient in light mode
         child: SafeArea(
           child: Column(
             children: [
@@ -219,7 +225,9 @@ class _WordDetailScreenState extends State<WordDetailScreen>
                       topLeft: Radius.circular(32),
                       topRight: Radius.circular(32),
                     ),
-                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    border: Border.all(
+                      color: AppColors.surface.withOpacity(0.05),
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.35),
@@ -228,23 +236,24 @@ class _WordDetailScreenState extends State<WordDetailScreen>
                       ),
                     ],
                   ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Column(
-                      children: [
-                        // Modern Word Card
-                        AnimationUtils.buildSafeScaleTransition(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: AppSpacing.lg),
+                      // Modern Word Card - Static at top
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.screenPadding,
+                        ),
+                        child: AnimationUtils.buildSafeScaleTransition(
                           animation: safeController,
                           child: _buildModernWordCard(isDark),
                         ),
-                        const SizedBox(height: AppSpacing.lg),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
 
-                        // Tabbed Content
-                        _buildTabbedContent(isDark),
-
-                        const SizedBox(height: AppSpacing.xl),
-                      ],
-                    ),
+                      // Tabbed Content - Fills remaining space
+                      Expanded(child: _buildTabbedContent(isDark)),
+                    ],
                   ),
                 ),
               ),
@@ -260,6 +269,18 @@ class _WordDetailScreenState extends State<WordDetailScreen>
     SessionService sessionService,
     WordService wordService,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    // Theme-aware button styling
+    final buttonBg = isDark 
+        ? AppColors.surface.withOpacity(0.2) 
+        : Colors.white;
+    
+    final iconColor = isDark 
+        ? AppColors.surface 
+        : Colors.black87;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -269,17 +290,24 @@ class _WordDetailScreenState extends State<WordDetailScreen>
       ),
       child: Row(
         children: [
-          // Back Button
+          // Back Button with shadow in light mode
           Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: buttonBg,
               borderRadius: AppBorderRadius.medium,
+              boxShadow: isDark ? null : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: IconButton(
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(
+              icon: Icon(
                 Icons.arrow_back_ios_rounded,
-                color: Colors.white,
+                color: iconColor,
               ),
               iconSize: 20,
             ),
@@ -297,12 +325,22 @@ class _WordDetailScreenState extends State<WordDetailScreen>
                 final isFav = keys.contains(widget.word.word);
                 return Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: buttonBg,
                     borderRadius: AppBorderRadius.medium,
+                    boxShadow: isDark ? null : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: IconButton(
                     onPressed: () async {
-                      await wordService.toggleFavoriteFirestore(
+                      // Light haptic feedback for favorite toggle
+                      HapticFeedback.lightImpact();
+                      // Use optimistic UI for instant updates (no blocking)
+                      await wordService.toggleFavoriteOptimistic(
                         widget.word,
                         sessionService.currentUser!.uid,
                       );
@@ -311,7 +349,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
                       isFav
                           ? Icons.favorite_rounded
                           : Icons.favorite_border_rounded,
-                      color: isFav ? Colors.red : Colors.white,
+                      color: isFav ? AppColors.error : iconColor,
                       size: 24,
                     ),
                   ),
@@ -325,25 +363,34 @@ class _WordDetailScreenState extends State<WordDetailScreen>
 
   // Modern Word Card
   Widget _buildModernWordCard(bool isDark) {
-    final cardSurface =
-        isDark ? const Color(0xFF14242C) : Colors.white.withOpacity(0.12);
-    final textColor = Colors.white;
-    final borderColor = Colors.white.withOpacity(isDark ? 0.18 : 0.12);
+    // Pure white card in light mode
+    final cardSurface = isDark 
+        ? AppDarkColors.surface 
+        : Colors.white;
+    
+    // Dark text in light mode, light text in dark mode
+    final textColor = isDark 
+        ? AppColors.surface 
+        : Colors.black87;
+    
+    final borderColor = isDark 
+        ? AppColors.surface.withOpacity(0.18) 
+        : Colors.transparent;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: cardSurface,
-        borderRadius: BorderRadius.circular(16), // ✅ Rounded corners
-        border: Border.all(color: borderColor, width: 1.2),
+        borderRadius: BorderRadius.circular(16),
+        border: isDark ? Border.all(color: borderColor, width: 1.2) : null,
         boxShadow: [
           BoxShadow(
-            color:
-                isDark
-                    ? Colors.black.withOpacity(0.5)
-                    : Colors.black.withOpacity(0.2),
-            blurRadius: isDark ? 20 : 14,
-            offset: const Offset(0, 6),
+            color: isDark 
+                ? Colors.black.withOpacity(0.5) 
+                : Colors.black.withOpacity(0.05), // Subtle shadow in light mode
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -385,17 +432,17 @@ class _WordDetailScreenState extends State<WordDetailScreen>
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.08),
+                            color: AppColors.surface.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.16),
+                              color: AppColors.surface.withOpacity(0.16),
                               width: 1,
                             ),
                           ),
                           child: Text(
                             tag,
                             style: TextStyle(
-                              color: _lexiflowLightTurquoise,
+                              color: AppColors.primaryLight,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -416,30 +463,47 @@ class _WordDetailScreenState extends State<WordDetailScreen>
 
   // Tabbed Content
   Widget _buildTabbedContent(bool isDark) {
-    final tabBackground =
-        isDark
-            ? Colors.white.withOpacity(0.05)
-            : Colors.white.withOpacity(0.08);
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    // Theme-aware tab bar background
+    final tabBackground = isDark 
+        ? AppColors.surface.withOpacity(0.05) 
+        : Colors.white;
+    
+    // Readable unselected tab color in light mode
+    final unselectedColor = isDark 
+        ? AppColors.surface.withOpacity(0.7) 
+        : Colors.grey[600];
 
     return DefaultTabController(
       length: 3,
       child: Column(
         children: [
-          // Modern Tab Bar - Dark Mode Optimized
+          // Modern Tab Bar - Theme Optimized
           Container(
+            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
             decoration: BoxDecoration(
               color: tabBackground,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.white.withOpacity(0.1),
+                color: isDark 
+                    ? AppColors.surface.withOpacity(0.1) 
+                    : Colors.grey[300]!,
                 width: 1,
               ),
+              boxShadow: isDark ? null : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: TabBar(
-              indicatorColor: _lexiflowTurquoise,
+              indicatorColor: AppColors.primary,
               indicatorWeight: 3.2,
-              labelColor: _lexiflowTurquoise,
-              unselectedLabelColor: Colors.white70,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: unselectedColor,
               labelStyle: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
@@ -449,10 +513,10 @@ class _WordDetailScreenState extends State<WordDetailScreen>
                 fontSize: 13,
               ),
               dividerColor: Colors.transparent,
-              overlayColor: MaterialStateProperty.resolveWith(
+              overlayColor: WidgetStateProperty.resolveWith(
                 (states) =>
-                    states.contains(MaterialState.pressed)
-                        ? _lexiflowTurquoise.withOpacity(0.12)
+                    states.contains(WidgetState.pressed)
+                        ? AppColors.primary.withOpacity(0.12)
                         : Colors.transparent,
               ),
               indicatorSize: TabBarIndicatorSize.label,
@@ -474,9 +538,8 @@ class _WordDetailScreenState extends State<WordDetailScreen>
           ),
           const SizedBox(height: AppSpacing.lg),
 
-          // Tab Content - Compact layout
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.4, // Ekranın %40'ı
+          // Tab Content - Flexible layout
+          Expanded(
             child: TabBarView(
               children: [
                 _buildMeaningTab(isDark),
@@ -493,13 +556,14 @@ class _WordDetailScreenState extends State<WordDetailScreen>
   // Meaning Tab
   Widget _buildMeaningTab(bool isDark) {
     return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       child: Column(
         children: [
           _buildModernInfoCard(
             icon: Icons.lightbulb_outline_rounded,
             title: 'English Meaning',
             content: widget.word.meaning,
-            color: _lexiflowLightTurquoise,
+            color: AppColors.primaryLight,
             delay: 200,
             isDark: isDark,
           ),
@@ -509,7 +573,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
               icon: Icons.translate_rounded,
               title: 'Türkçe Anlamı',
               content: widget.word.tr,
-              color: _lexiflowTurquoise,
+              color: AppColors.primary,
               delay: 400,
               isDark: isDark,
             ),
@@ -522,6 +586,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
   // Examples Tab
   Widget _buildExamplesTab(bool isDark) {
     return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       child: Column(
         children: [
           if (widget.word.example.isNotEmpty)
@@ -529,7 +594,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
               icon: Icons.format_quote_rounded,
               title: 'Example Sentence',
               content: widget.word.example,
-              color: _lexiflowMintAccent,
+              color: AppColors.secondary,
               delay: 200,
               isDark: isDark,
             ),
@@ -540,7 +605,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
               icon: Icons.auto_stories_rounded,
               title: 'Additional Example',
               content: widget.word.exampleSentence,
-              color: _lexiflowLightTurquoise,
+              color: AppColors.primaryLight,
               delay: 400,
               isDark: isDark,
             ),
@@ -553,6 +618,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
   // Details Tab
   Widget _buildDetailsTab(bool isDark) {
     return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       child: Column(
         children: [
           _buildModernInfoCard(
@@ -560,7 +626,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
             title: 'Word Information',
             content:
                 'Type: ${widget.word.tags.isNotEmpty ? widget.word.tags.join(', ') : 'General'}',
-            color: _lexiflowTurquoise,
+            color: AppColors.primary,
             delay: 200,
             isDark: isDark,
           ),
@@ -570,7 +636,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
               icon: Icons.edit_rounded,
               title: 'Custom Word',
               content: 'This is a custom word added by you.',
-              color: _lexiflowLightTurquoise,
+              color: AppColors.primaryLight,
               delay: 400,
               isDark: isDark,
             ),
@@ -589,12 +655,19 @@ class _WordDetailScreenState extends State<WordDetailScreen>
     required int delay,
     required bool isDark,
   }) {
-    final backgroundColor =
-        isDark
-            ? _lexiflowCardBackground.withOpacity(0.92)
-            : _lexiflowCardBackground.withOpacity(0.85);
-    final textColor = Colors.white;
-    final borderColor = Colors.white.withOpacity(0.1);
+    // Pure white cards in light mode
+    final backgroundColor = isDark 
+        ? AppDarkColors.surfaceVariant.withOpacity(0.92) 
+        : Colors.white;
+    
+    // Dark text in light mode for readability
+    final textColor = isDark 
+        ? AppColors.surface 
+        : Colors.black87;
+    
+    final borderColor = isDark 
+        ? AppColors.surface.withOpacity(0.1) 
+        : Colors.transparent;
 
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 600 + delay),
@@ -612,16 +685,16 @@ class _WordDetailScreenState extends State<WordDetailScreen>
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: backgroundColor,
-          borderRadius: BorderRadius.circular(16), // ✅ Rounded corners
-          border: Border.all(color: borderColor, width: 1),
+          borderRadius: BorderRadius.circular(16),
+          border: isDark ? Border.all(color: borderColor, width: 1) : null,
           boxShadow: [
             BoxShadow(
-              color:
-                  isDark
-                      ? Colors.black.withOpacity(0.4)
-                      : Colors.black.withOpacity(0.18),
-              blurRadius: isDark ? 18 : 12,
-              offset: const Offset(0, 10),
+              color: isDark 
+                  ? Colors.black.withOpacity(0.4) 
+                  : Colors.black.withOpacity(0.05), // Subtle shadow in light mode
+              blurRadius: 20,
+              spreadRadius: 0,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -649,7 +722,7 @@ class _WordDetailScreenState extends State<WordDetailScreen>
               content,
               style: TextStyle(
                 fontSize: 15,
-                color: textColor,
+                color: textColor, // Dark text in light mode
                 height: 1.6,
                 fontWeight: FontWeight.w400,
               ),
@@ -704,8 +777,8 @@ class _AnimatedAudioButtonState extends State<AnimatedAudioButton>
       duration: const Duration(milliseconds: 500),
     );
     _colorAnim = ColorTween(
-      begin: _lexiflowTurquoise,
-      end: _lexiflowLightTurquoise,
+      begin: AppColors.primary,
+      end: AppColors.primaryLight,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
@@ -730,7 +803,7 @@ class _AnimatedAudioButtonState extends State<AnimatedAudioButton>
     return AnimatedBuilder(
       animation: _colorAnim,
       builder: (context, child) {
-        final color = _colorAnim.value ?? _lexiflowTurquoise;
+        final color = _colorAnim.value ?? AppColors.primary;
         return GestureDetector(
           onTap: _handleTap,
           child: Container(
@@ -739,7 +812,7 @@ class _AnimatedAudioButtonState extends State<AnimatedAudioButton>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
-                colors: [color, _lexiflowMintAccent],
+                colors: [color, AppColors.secondary],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -832,10 +905,10 @@ class _LearnedRippleButtonState extends State<LearnedRippleButton>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(
-            color: _lexiflowTurquoise.withOpacity(0.2),
+            color: AppColors.primary.withOpacity(0.2),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: _lexiflowMintAccent.withOpacity(0.5),
+              color: AppColors.secondary.withOpacity(0.5),
               width: 2,
             ),
           ),
@@ -849,12 +922,12 @@ class _LearnedRippleButtonState extends State<LearnedRippleButton>
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      _lexiflowMintAccent,
+                      AppColors.secondary,
                     ),
                   ),
                 )
               else
-                Icon(Icons.check_circle, color: _lexiflowMintAccent, size: 20),
+                Icon(Icons.check_circle, color: AppColors.secondary, size: 20),
               const SizedBox(width: 8),
               Text(
                 widget.isProcessing ? 'İşaretleniyor...' : 'Öğrenildi',
@@ -885,7 +958,7 @@ class _LearnedRippleButtonState extends State<LearnedRippleButton>
               height: 50 + 110 * value,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _lexiflowRippleTint.withOpacity(0.18 * (1 - value)),
+                color: AppColors.primary.withOpacity(0.18 * (1 - value)),
               ),
             );
           },
@@ -902,26 +975,26 @@ class _LearnedRippleButtonState extends State<LearnedRippleButton>
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          _lexiflowTurquoise,
+                          AppColors.primary,
                         ),
                       ),
                     )
                     : const Icon(
                       Icons.check_circle_outline,
-                      color: _lexiflowTurquoise,
+                      color: AppColors.primary,
                       size: 18,
                     ),
             label: Text(
               widget.isProcessing ? 'İşaretleniyor...' : 'Bu kelimeyi öğrendim',
               style: const TextStyle(
-                color: _lexiflowTurquoise,
+                color: AppColors.primary,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: _lexiflowTurquoise),
-              foregroundColor: _lexiflowTurquoise,
+              side: const BorderSide(color: AppColors.primary),
+              foregroundColor: AppColors.primary,
               backgroundColor: Colors.white.withOpacity(0.02),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(

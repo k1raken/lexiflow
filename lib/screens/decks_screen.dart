@@ -171,6 +171,7 @@ class DecksScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
         onTap: () {
+          if (!mounted) return;
           Navigator.push(
             context,
             MaterialPageRoute(

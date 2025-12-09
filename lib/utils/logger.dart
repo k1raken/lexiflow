@@ -25,12 +25,12 @@ class Logger {
     _log('ERROR', message, tag);
     if (error != null) {
       if (kDebugMode) {
-        print('ERROR DETAILS: $error');
+
       }
     }
     if (stackTrace != null) {
       if (kDebugMode) {
-        print('STACK TRACE: $stackTrace');
+
       }
     }
   }
@@ -40,7 +40,7 @@ class Logger {
       final now = DateTime.now();
       final formattedDate = '${now.hour}:${now.minute}:${now.second}.${now.millisecond}';
       final tagStr = tag != null ? '[$tag]' : '';
-      print('$formattedDate [$level]$tagStr $message');
+
     }
   }
   
@@ -58,7 +58,7 @@ class Logger {
     try {
       final tagStr = tag != null ? '[$tag]' : '';
       if (kDebugMode) {
-        print('🧠 MEMORY $tagStr [$operation]');
+
       }
       
       // Timeline'a bellek kullanım bilgisini ekle
@@ -71,7 +71,7 @@ class Logger {
       // _requestGC();
     } catch (e) {
       if (kDebugMode) {
-        print('❌ Memory logging error: $e');
+
       }
     }
   }
@@ -83,9 +83,9 @@ class Logger {
     if (kDebugMode) {
       try {
         task.start(name);
-        print('⏱️ PERFORMANCE START [$tag] $name');
+
       } catch (e) {
-        print('⚠️ Timeline task start failed: $e');
+
       }
     }
     
@@ -97,9 +97,9 @@ class Logger {
     if (kDebugMode) {
       try {
         task.finish();
-        print('⏱️ PERFORMANCE END [$tag] $name');
+
       } catch (e) {
-        print('⚠️ Timeline task finish failed: $e');
+
       }
     }
   }

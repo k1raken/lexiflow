@@ -37,12 +37,10 @@ class FavoritesCleanupService {
       }
       
       if (kDebugMode) {
-        print('🧹 Cleaned up ${keysToDelete.length} duplicate favorites');
       }
       return keysToDelete.length;
     } catch (e) {
       if (kDebugMode) {
-        print('❌ Error cleaning up favorites: $e');
       }
       return 0;
     }
@@ -62,7 +60,6 @@ class FavoritesCleanupService {
       };
     } catch (e) {
       if (kDebugMode) {
-        print('❌ Error getting favorites stats: $e');
       }
       return {'total': 0, 'unique': 0, 'duplicates': 0};
     }

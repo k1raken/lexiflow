@@ -43,11 +43,9 @@ class ConnectivityService {
       _connectivityController.add(_currentResult);
       
       if (kDebugMode) {
-        print('🌐 ConnectivityService initialized - Online: $_isOnline, Result: $_currentResult');
       }
     } catch (e) {
       if (kDebugMode) {
-        print('⚠️ Failed to get initial connectivity: $e');
       }
       // Assume offline on error
       _isOnline = false;
@@ -68,7 +66,6 @@ class ConnectivityService {
       _handleConnectivityChange,
       onError: (error) {
         if (kDebugMode) {
-          print('⚠️ Connectivity stream error: $error');
         }
         // On error, assume offline
         _handleConnectivityChange(ConnectivityResult.none);
@@ -87,7 +84,6 @@ class ConnectivityService {
       _onlineStatusController.add(_isOnline);
       
       if (kDebugMode) {
-        print('🌐 Connectivity changed: ${wasOnline ? 'Online' : 'Offline'} → ${_isOnline ? 'Online' : 'Offline'} ($result)');
       }
     }
     
@@ -112,7 +108,6 @@ class ConnectivityService {
       return isOnline;
     } catch (e) {
       if (kDebugMode) {
-        print('⚠️ Failed to check connectivity: $e');
       }
       return false; // Assume offline on error
     }

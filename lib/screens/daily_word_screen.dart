@@ -8,6 +8,7 @@ import '../models/word_model.dart';
 import '../services/daily_word_service.dart';
 import '../services/session_service.dart';
 import '../screens/word_detail_screen.dart';
+import '../widgets/countdown_widget.dart';
 
 class DailyWordScreen extends StatefulWidget {
   const DailyWordScreen({super.key});
@@ -25,19 +26,14 @@ class _DailyWordScreenState extends State<DailyWordScreen> {
   bool _isLoadingAd = false;
   String? _errorMessage;
 
-  Timer? _countdownTimer;
-  Duration _timeUntilReset = Duration.zero;
-
   @override
   void initState() {
     super.initState();
     _initializeDailyWords();
-    _startCountdownTimer();
   }
 
   @override
   void dispose() {
-    _countdownTimer?.cancel();
     _dailyWordService.dispose();
     super.dispose();
   }
@@ -81,25 +77,12 @@ class _DailyWordScreenState extends State<DailyWordScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint('❌ Error initializing daily words: $e');
+
       setState(() {
         _errorMessage = 'Günlük kelimeler yüklenirken hata oluştu';
         _isLoading = false;
       });
     }
-  }
-
-  void _startCountdownTimer() {
-    _updateTimeUntilReset();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _updateTimeUntilReset();
-    });
-  }
-
-  void _updateTimeUntilReset() {
-    setState(() {
-      _timeUntilReset = _dailyWordService.getTimeUntilReset();
-    });
   }
 
   Future<void> _watchAdForExtraWords() async {
@@ -111,12 +94,12 @@ class _DailyWordScreenState extends State<DailyWordScreen> {
     setState(() => _isLoadingAd = true);
 
     try {
-      final success = await _dailyWordService.addExtraWordsAfterAd(userId);
+      final extraWords = await _dailyWordService.addExtraWordsAfterAd(userId);
 
-      if (success && mounted) {
+      if (extraWords != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('🎉 +5 kelime eklendi!'),
+            content: Text('🎉 +${extraWords.length} kelime eklendi!'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -140,7 +123,7 @@ class _DailyWordScreenState extends State<DailyWordScreen> {
         );
       }
     } catch (e) {
-      debugPrint('❌ Error watching ad: $e');
+
     } finally {
       if (mounted) {
         setState(() => _isLoadingAd = false);
@@ -165,13 +148,14 @@ class _DailyWordScreenState extends State<DailyWordScreen> {
         ];
       });
     } catch (e) {
-      debugPrint('❌ Error marking word as completed: $e');
+
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
@@ -302,39 +286,7 @@ class _DailyWordScreenState extends State<DailyWordScreen> {
     );
   }
 
-  Widget _buildCountdownTimer() {
-    final hours = _timeUntilReset.inHours;
-    final minutes = _timeUntilReset.inMinutes % 60;
-    final seconds = _timeUntilReset.inSeconds % 60;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.timer, color: Colors.white, size: 18),
-          const SizedBox(width: 8),
-          Text(
-            'Yenilenme: ${hours}s ${minutes}d ${seconds}sn',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildProgressCard() {
-    if (_dailyWordsData == null) return const SizedBox.shrink();
-
     final totalWords =
         List<String>.from(_dailyWordsData!['dailyWords'] ?? []).length +
         List<String>.from(_dailyWordsData!['extraWords'] ?? []).length;
@@ -521,6 +473,7 @@ class _DailyWordScreenState extends State<DailyWordScreen> {
       child: InkWell(
         onTap: () async {
           // Navigate to word detail
+          if (!mounted) return;
           await Navigator.push(
             context,
             MaterialPageRoute(
@@ -595,4 +548,9 @@ class _DailyWordScreenState extends State<DailyWordScreen> {
       ),
     );
   }
+
+  Widget _buildCountdownTimer() {
+    return const CountdownWidget();
+  }
 }
+

@@ -44,10 +44,9 @@ class ActivityService {
           .doc(FirestoreSchema.getUserActivityPath(userId, timestamp))
           .set(activityData);
 
-      debugPrint('✅ Quiz completion logged: $quizType');
       return true;
     } catch (e) {
-      debugPrint('❌ Error logging quiz completion: $e');
+
       return false;
     }
   }
@@ -75,10 +74,9 @@ class ActivityService {
           .doc(FirestoreSchema.getUserActivityPath(userId, timestamp))
           .set(activityData);
 
-      debugPrint('✅ Word learned logged: $wordId');
       return true;
     } catch (e) {
-      debugPrint('❌ Error logging word learned: $e');
+
       return false;
     }
   }
@@ -103,10 +101,9 @@ class ActivityService {
           .doc(FirestoreSchema.getUserActivityPath(userId, timestamp))
           .set(activityData);
 
-      debugPrint('✅ Streak update logged: $newStreak');
       return true;
     } catch (e) {
-      debugPrint('❌ Error logging streak update: $e');
+
       return false;
     }
   }
@@ -131,10 +128,9 @@ class ActivityService {
           .doc(FirestoreSchema.getUserActivityPath(userId, timestamp))
           .set(activityData);
 
-      debugPrint('✅ Level up logged: $newLevel');
       return true;
     } catch (e) {
-      debugPrint('❌ Error logging level up: $e');
+
       return false;
     }
   }
@@ -160,10 +156,9 @@ class ActivityService {
           .doc(FirestoreSchema.getUserActivityPath(userId, timestamp))
           .set(activityData);
 
-      debugPrint('✅ Custom word added logged: $wordId');
       return true;
     } catch (e) {
-      debugPrint('❌ Error logging custom word added: $e');
+
       return false;
     }
   }
@@ -215,7 +210,7 @@ class ActivityService {
         return data;
       }).toList();
     } catch (e) {
-      debugPrint('Error getting user activities: $e');
+
       return [];
     }
   }
@@ -246,7 +241,7 @@ class ActivityService {
         return data;
       }).toList();
     } catch (e) {
-      debugPrint('Error getting today activities: $e');
+
       return [];
     }
   }
@@ -320,7 +315,7 @@ class ActivityService {
         'activityTypeCounts': activityTypeCounts,
       };
     } catch (e) {
-      debugPrint('Error getting activity statistics: $e');
+
       return {};
     }
   }
@@ -377,7 +372,7 @@ class ActivityService {
       };
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error getting daily activity summary: $e');
+
       }
       return {};
     }
@@ -468,7 +463,7 @@ class ActivityService {
         'activitiesCount': snapshot.docs.length,
       };
     } catch (e) {
-      debugPrint('Error getting weekly activity summary: $e');
+
       return {};
     }
   }
@@ -501,10 +496,9 @@ class ActivityService {
 
       await batch.commit();
 
-      debugPrint('✅ Deleted ${snapshot.docs.length} old activities');
       return true;
     } catch (e) {
-      debugPrint('❌ Error deleting old activities: $e');
+
       return false;
     }
   }
@@ -542,10 +536,10 @@ class ActivityService {
       await batchHelper.commitAll();
       perfTask.finish();
 
-      Logger.i('✅ Batch logged ${activities.length} activities', 'ActivityService');
+      Logger.i('Batch logged ${activities.length} activities', 'ActivityService');
       return true;
     } catch (e) {
-      Logger.e('❌ Error batch logging activities', e, null, 'ActivityService');
+      Logger.e('Error batch logging activities', e, null, 'ActivityService');
       return false;
     }
   }

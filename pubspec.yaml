@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.0+3
 
 environment:
   sdk: ^3.7.0
@@ -30,19 +30,20 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^2.27.0
-  cloud_firestore: ^4.15.8
-  firebase_auth: ^4.17.8
-  firebase_analytics: ^10.8.0
-  firebase_crashlytics: ^3.4.9
-  firebase_remote_config: ^4.3.10
-  google_sign_in: ^6.1.5
-  flutter_dotenv: ^5.1.0
-  firebase_messaging: ^14.7.10
-  package_info_plus: ^7.0.0
+  animations: ^2.0.11
+  firebase_core: ^4.2.1
+  cloud_firestore: ^6.1.0
+  firebase_auth: ^6.1.2
+  firebase_analytics: ^12.0.4
+  firebase_crashlytics: ^5.0.5
+  firebase_remote_config: ^6.1.2
+  google_sign_in: ^6.2.1
+  firebase_messaging: ^16.0.4
+  package_info_plus: ^9.0.0
 
   dynamic_color: ^1.6.6
   cupertino_icons: ^1.0.8
+  cloud_functions: ^6.0.4
   google_fonts: ^6.1.0
   flutter_local_notifications: ^19.4.2
   timezone: ^0.10.1
@@ -61,13 +62,15 @@ dependencies:
   flutter_svg: ^2.0.10
   fl_chart: ^0.66.2
   equatable: ^2.0.5
-  rxdart: ^0.27.7
+  rxdart: ^0.28.0
   screenshot: ^3.0.0
   share_plus: ^7.2.1
   gal: ^2.3.0
   intl: ^0.20.2
   permission_handler: ^11.3.1
   device_info_plus: ^10.1.0
+  cached_network_image: ^3.3.1
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -85,7 +88,7 @@ dev_dependencies:
   hive_generator: ^2.0.1
   flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.3.10
-  fake_cloud_firestore: ^2.4.2
+  fake_cloud_firestore: ^4.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -100,14 +103,13 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - .env
     - assets/words/
     - assets/icons/
-    - assets/images/
     - assets/AppIcons/
     - assets/logo/lexiflow_logo.png
     - assets/legal/privacy_policy.txt
     - assets/legal/terms_of_service.txt
+    # - .env  <-- REMOVED FOR SECURITY
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -148,9 +150,9 @@ flutter_launcher_icons:
 # Flutter Native Splash configuration
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/images/lexiflow_light.png
+  image: assets/logo/lexiflow_logo.png
   android_12:
-    image: assets/images/lexiflow_light.png
+    image: assets/logo/lexiflow_logo.png
     color: "#FFFFFF"
   android: true
   ios: true
